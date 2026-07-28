@@ -45,6 +45,11 @@ from trustworthy_kb.ingestion.safety import (
     SafetySeverity,
     SafetySignal,
 )
+from trustworthy_kb.ingestion.service import (
+    IngestionService,
+    PreparedDocument,
+    materialize_plan_items,
+)
 from trustworthy_kb.ingestion.snapshots import ContentAddressedSnapshotStore
 from trustworthy_kb.ingestion.types import (
     ParsedBlock,
@@ -64,6 +69,7 @@ __all__ = [
     "IngestionManifest",
     "IngestionPlan",
     "IngestionPlanItem",
+    "IngestionService",
     "KnownSource",
     "ManifestEntry",
     "MarkdownBlockParser",
@@ -72,6 +78,7 @@ __all__ = [
     "ObsidianCommandError",
     "ParsedBlock",
     "ParsedDocument",
+    "PreparedDocument",
     "SafetyCategory",
     "SafetyReport",
     "SafetySeverity",
@@ -91,6 +98,7 @@ __all__ = [
     "canonical_source_uri",
     "decode_markdown",
     "file_key",
+    "materialize_plan_items",
     "normalize_block_text",
     "normalize_vault_relative_path",
     "path_is_in_scope",

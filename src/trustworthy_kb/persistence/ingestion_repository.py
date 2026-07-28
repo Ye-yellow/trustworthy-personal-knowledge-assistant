@@ -151,7 +151,6 @@ class IngestionRepository:
             expected_revision,
             status=IngestionItemStatus.APPLYING,
             completed_at=None,
-            error_category=None,
         )
 
     async def retry_item(
@@ -307,6 +306,8 @@ class IngestionRepository:
         *,
         error_category: str,
         expected_revision: int,
+        source_id: SourceId | None = None,
+        result_version_id: SourceVersionId | None = None,
     ) -> IngestionItemRecord:
         if not error_category.strip():
             raise invariant("ingestion item failure", item_id)
@@ -319,6 +320,10 @@ class IngestionRepository:
             expected_revision,
             status=IngestionItemStatus.FAILED,
             error_category=error_category,
+            source_id=source_id if source_id is not None else item.source_id,
+            result_version_id=(
+                result_version_id if result_version_id is not None else item.result_version_id
+            ),
             completed_at=utc_now(),
         )
 
