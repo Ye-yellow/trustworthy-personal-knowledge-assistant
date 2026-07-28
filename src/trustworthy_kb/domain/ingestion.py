@@ -50,6 +50,16 @@ class IngestionRunRecord(DomainRecord):
     updated_at: AwareDatetime
 
 
+class IngestionRunSummary(DomainRecord):
+    total: NonNegativeInt
+    pending: NonNegativeInt
+    applying: NonNegativeInt
+    succeeded: NonNegativeInt
+    skipped: NonNegativeInt
+    quarantined: NonNegativeInt
+    failed: NonNegativeInt
+
+
 class IngestionItemRecord(DomainRecord):
     id: IngestionItemId
     run_id: IngestionRunId
@@ -72,4 +82,9 @@ class IngestionItemRecord(DomainRecord):
     completed_at: AwareDatetime | None = None
 
 
-__all__ = ["IngestionItemRecord", "IngestionRunRecord", "SourceLocationRecord"]
+__all__ = [
+    "IngestionItemRecord",
+    "IngestionRunRecord",
+    "IngestionRunSummary",
+    "SourceLocationRecord",
+]

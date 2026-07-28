@@ -56,6 +56,7 @@ from trustworthy_kb.domain.ids import (
 from trustworthy_kb.domain.ingestion import (
     IngestionItemRecord,
     IngestionRunRecord,
+    IngestionRunSummary,
     SourceLocationRecord,
 )
 from trustworthy_kb.domain.knowledge import (
@@ -114,6 +115,7 @@ __all__ = [
     "IngestionRunId",
     "IngestionRunRecord",
     "IngestionRunStatus",
+    "IngestionRunSummary",
     "InvalidStateTransitionError",
     "InvariantViolationError",
     "KnowledgeChangeId",
