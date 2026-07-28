@@ -11,4 +11,3 @@ Use synthetic fixtures for tests and documentation. Redact usernames, local abso
 Do not disclose credentials, personal data, or exploitable details in a public issue. Use GitHub private vulnerability reporting when it is available for this repository.
 
 If a secret is committed, revoke or rotate it immediately before attempting history cleanup.
-
