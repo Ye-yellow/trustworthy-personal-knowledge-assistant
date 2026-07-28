@@ -12,6 +12,7 @@ from trustworthy_kb.persistence import Base, create_database_engine, create_sess
 from trustworthy_kb.persistence.source_tables import SourceTable
 
 EXPECTED_TABLES = {
+    "answer_runs",
     "claim_origins",
     "claims",
     "content_blocks",

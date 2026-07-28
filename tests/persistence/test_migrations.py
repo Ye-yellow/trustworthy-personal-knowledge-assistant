@@ -18,6 +18,7 @@ from trustworthy_kb.persistence.migrations import assert_schema_current
 
 PROJECT_ROOT = Path(__file__).parents[2]
 EXPECTED_CONTROL_TABLES = {
+    "answer_runs",
     "claim_origins",
     "claims",
     "content_blocks",
@@ -243,4 +244,5 @@ def test_initial_migration_supports_offline_sql(tmp_path: Path) -> None:
     assert "CREATE TABLE governance_runs" in sql
     assert "CREATE TABLE review_requests" in sql
     assert "CREATE TABLE publication_runs" in sql
+    assert "CREATE TABLE answer_runs" in sql
     assert "trg_operation_logs_no_update" in sql

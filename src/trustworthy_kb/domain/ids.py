@@ -96,6 +96,10 @@ class PublicationRunId(TypedId):
     prefix = "pubrun_"
 
 
+class AnswerRunId(TypedId):
+    prefix = "ansrun_"
+
+
 class ModelRunId(TypedId):
     prefix = "modelrun_"
 
@@ -143,6 +147,7 @@ ALL_ID_TYPES: tuple[type[TypedId], ...] = (
     IndexGenerationId,
     IndexJobId,
     PublicationRunId,
+    AnswerRunId,
     ModelRunId,
     OperationLogId,
     IdempotencyRecordId,
@@ -165,6 +170,7 @@ def parse_typed_id(value: str) -> TypedId:
 
 __all__ = [
     "ALL_ID_TYPES",
+    "AnswerRunId",
     "ClaimId",
     "ContentBlockId",
     "CuratedVersionId",

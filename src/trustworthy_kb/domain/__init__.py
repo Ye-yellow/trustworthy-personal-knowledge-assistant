@@ -1,9 +1,12 @@
 """Public domain contracts for the trustworthy knowledge control plane."""
 
+from trustworthy_kb.domain.answer import AnswerRunRecord
 from trustworthy_kb.domain.audit import IdempotencyRecord, ModelRunRecord, OperationLogRecord
 from trustworthy_kb.domain.audit_hash import canonical_audit_json, operation_log_entry_hash
 from trustworthy_kb.domain.enums import (
     ActorType,
+    AnswerRunStatus,
+    AnswerScope,
     ChangeType,
     ClaimStatus,
     ClaimType,
@@ -42,6 +45,7 @@ from trustworthy_kb.domain.governance import (
 )
 from trustworthy_kb.domain.ids import (
     ALL_ID_TYPES,
+    AnswerRunId,
     ClaimId,
     ContentBlockId,
     CuratedVersionId,
@@ -96,6 +100,10 @@ from trustworthy_kb.domain.transitions import can_transition, require_transition
 __all__ = [
     "ALL_ID_TYPES",
     "ActorType",
+    "AnswerRunId",
+    "AnswerRunRecord",
+    "AnswerRunStatus",
+    "AnswerScope",
     "ChangeType",
     "ClaimId",
     "ClaimOriginRecord",

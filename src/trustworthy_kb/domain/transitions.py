@@ -5,6 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 
 from trustworthy_kb.domain.enums import (
+    AnswerRunStatus,
     ClaimStatus,
     CuratedVersionStatus,
     GovernanceItemStage,
@@ -23,6 +24,15 @@ from trustworthy_kb.domain.enums import (
 from trustworthy_kb.domain.errors import InvalidStateTransitionError
 
 _TRANSITIONS: dict[type[StrEnum], dict[StrEnum, frozenset[StrEnum]]] = {
+    AnswerRunStatus: {
+        AnswerRunStatus.IN_PROGRESS: frozenset(
+            {
+                AnswerRunStatus.ANSWERED,
+                AnswerRunStatus.REFUSED,
+                AnswerRunStatus.FAILED,
+            }
+        )
+    },
     SourceVersionStatus: {
         SourceVersionStatus.CAPTURED: frozenset(
             {

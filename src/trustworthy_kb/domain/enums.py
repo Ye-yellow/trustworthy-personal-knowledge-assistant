@@ -119,6 +119,18 @@ class PublicationRunStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class AnswerScope(StrEnum):
+    GENERAL = "general"
+    PERSONAL = "personal"
+
+
+class AnswerRunStatus(StrEnum):
+    IN_PROGRESS = "IN_PROGRESS"
+    ANSWERED = "ANSWERED"
+    REFUSED = "REFUSED"
+    FAILED = "FAILED"
+
+
 class ChangeType(StrEnum):
     CREATED = "CREATED"
     UPDATED = "UPDATED"
@@ -241,6 +253,8 @@ class ActorType(StrEnum):
 
 __all__ = [
     "ActorType",
+    "AnswerRunStatus",
+    "AnswerScope",
     "ChangeType",
     "ClaimStatus",
     "ClaimType",
