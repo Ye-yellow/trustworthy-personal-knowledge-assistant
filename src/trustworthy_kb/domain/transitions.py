@@ -10,6 +10,8 @@ from trustworthy_kb.domain.enums import (
     IdempotencyStatus,
     IndexGenerationStatus,
     IndexJobStatus,
+    IngestionItemStatus,
+    IngestionRunStatus,
     KnowledgeChangeStatus,
     ModelRunStatus,
     SourceVersionStatus,
@@ -142,6 +144,35 @@ _TRANSITIONS: dict[type[StrEnum], dict[StrEnum, frozenset[StrEnum]]] = {
         IdempotencyStatus.UNKNOWN: frozenset(
             {IdempotencyStatus.SUCCEEDED, IdempotencyStatus.FAILED}
         ),
+    },
+    IngestionRunStatus: {
+        IngestionRunStatus.PLANNING: frozenset(
+            {
+                IngestionRunStatus.APPLYING,
+                IngestionRunStatus.FAILED,
+                IngestionRunStatus.ABANDONED,
+            }
+        ),
+        IngestionRunStatus.APPLYING: frozenset(
+            {
+                IngestionRunStatus.COMPLETED,
+                IngestionRunStatus.PARTIAL_FAILED,
+                IngestionRunStatus.FAILED,
+                IngestionRunStatus.ABANDONED,
+            }
+        ),
+    },
+    IngestionItemStatus: {
+        IngestionItemStatus.PENDING: frozenset({IngestionItemStatus.APPLYING}),
+        IngestionItemStatus.APPLYING: frozenset(
+            {
+                IngestionItemStatus.SUCCEEDED,
+                IngestionItemStatus.SKIPPED,
+                IngestionItemStatus.QUARANTINED,
+                IngestionItemStatus.FAILED,
+            }
+        ),
+        IngestionItemStatus.FAILED: frozenset({IngestionItemStatus.PENDING}),
     },
 }
 

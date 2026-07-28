@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import Connection, pool
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from trustworthy_kb.config import DatabaseSettings
@@ -54,7 +56,11 @@ async def run_migrations_online() -> None:
     """Run migrations through an AsyncEngine."""
 
     section = config.get_section(config.config_ini_section, {})
-    section["sqlalchemy.url"] = _database_url()
+    database_url = _database_url()
+    database = make_url(database_url).database
+    if database not in {None, ":memory:"}:
+        Path(database).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
+    section["sqlalchemy.url"] = database_url
     connectable = async_engine_from_config(
         section,
         prefix="sqlalchemy.",

@@ -21,6 +21,7 @@ from trustworthy_kb.domain import (
     require_transition,
 )
 from trustworthy_kb.persistence.base import utc_now
+from trustworthy_kb.persistence.ingestion_tables import SourceLocationTable
 from trustworthy_kb.persistence.repository_base import (
     concurrent,
     flush_safely,
@@ -69,6 +70,36 @@ class SourceRepository:
             raise not_found("source", source_id)
         return to_record(SourceRecord, row)
 
+    async def find_source_by_location(
+        self,
+        vault_id_hash: str,
+        path_key: str,
+    ) -> SourceRecord | None:
+        row = await self._session.scalar(
+            select(SourceTable)
+            .join(SourceLocationTable, SourceLocationTable.source_id == SourceTable.id)
+            .where(
+                SourceLocationTable.vault_id_hash == vault_id_hash,
+                SourceLocationTable.path_key == path_key,
+                SourceLocationTable.deleted_at.is_(None),
+                SourceTable.deleted_at.is_(None),
+            )
+        )
+        return None if row is None else to_record(SourceRecord, row)
+
+    async def list_live_sources_for_vault(self, vault_id_hash: str) -> tuple[SourceRecord, ...]:
+        rows = await self._session.scalars(
+            select(SourceTable)
+            .join(SourceLocationTable, SourceLocationTable.source_id == SourceTable.id)
+            .where(
+                SourceLocationTable.vault_id_hash == vault_id_hash,
+                SourceLocationTable.deleted_at.is_(None),
+                SourceTable.deleted_at.is_(None),
+            )
+            .order_by(SourceLocationTable.path_key)
+        )
+        return tuple(to_record(SourceRecord, row) for row in rows)
+
     async def append_source_version(self, record: SourceVersionRecord) -> SourceVersionRecord:
         await self.get_source(record.source_id)
         if record.revision != 1 or record.status is not SourceVersionStatus.CAPTURED:
@@ -88,6 +119,57 @@ class SourceRepository:
         self._session.add_all(rows)
         await flush_safely(self._session, entity="content block", identifier=records[0].id)
         return tuple(to_record(ContentBlockRecord, row) for row in rows)
+
+    async def list_content_blocks(
+        self,
+        version_id: SourceVersionId,
+    ) -> tuple[ContentBlockRecord, ...]:
+        await self.get_source_version(version_id)
+        rows = await self._session.scalars(
+            select(ContentBlockTable)
+            .where(ContentBlockTable.source_version_id == version_id)
+            .order_by(ContentBlockTable.ordinal)
+        )
+        return tuple(to_record(ContentBlockRecord, row) for row in rows)
+
+    async def get_source_version(self, version_id: SourceVersionId) -> SourceVersionRecord:
+        return to_record(SourceVersionRecord, await self._source_version_row(version_id))
+
+    async def get_current_source_version(
+        self,
+        source_id: SourceId,
+    ) -> SourceVersionRecord | None:
+        source = await self.get_source(source_id)
+        if source.current_version_id is None:
+            return None
+        return await self.get_source_version(source.current_version_id)
+
+    async def get_latest_source_version(
+        self,
+        source_id: SourceId,
+    ) -> SourceVersionRecord | None:
+        await self.get_source(source_id)
+        row = await self._session.scalar(
+            select(SourceVersionTable)
+            .where(SourceVersionTable.source_id == source_id)
+            .order_by(SourceVersionTable.version_number.desc())
+            .limit(1)
+        )
+        return None if row is None else to_record(SourceVersionRecord, row)
+
+    async def find_source_version_by_hash(
+        self,
+        source_id: SourceId,
+        content_hash: str,
+    ) -> SourceVersionRecord | None:
+        await self.get_source(source_id)
+        row = await self._session.scalar(
+            select(SourceVersionTable).where(
+                SourceVersionTable.source_id == source_id,
+                SourceVersionTable.content_hash == content_hash,
+            )
+        )
+        return None if row is None else to_record(SourceVersionRecord, row)
 
     async def transition_source_version(
         self,
@@ -139,6 +221,24 @@ class SourceRepository:
             source_id,
             expected_revision,
             deleted_at=deleted_at or utc_now(),
+        )
+
+    async def move_source(
+        self,
+        source_id: SourceId,
+        canonical_uri: str,
+        *,
+        expected_revision: int,
+    ) -> SourceRecord:
+        source = await self.get_source(source_id)
+        if source.revision != expected_revision or not canonical_uri.strip():
+            if source.revision != expected_revision:
+                raise concurrent("source", source_id)
+            raise invariant("source move", source_id)
+        return await self._update_source(
+            source_id,
+            expected_revision,
+            canonical_uri=canonical_uri,
         )
 
     async def _source_version_row(self, version_id: SourceVersionId) -> SourceVersionTable:

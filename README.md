@@ -2,8 +2,9 @@
 
 一个以 Obsidian 为人工可读知识真源、以 SQLite 管理知识血缘和状态、以 Milvus 提供可重建混合检索的可信个人知识助手。
 
-项目已完成 L0 工程/模型网关基线和 L1 领域/SQLite 控制面。采集、知识治理、
-Obsidian 发布与检索仍未实现，因此当前版本尚不适合保存或处理真实私人资料。
+项目已完成 L0 工程/模型网关基线、L1 领域/SQLite 控制面和 L2 本地 Markdown
+采集与故障恢复。知识治理、Obsidian 发布与检索仍未实现，因此当前版本尚不适合
+生产使用或处理唯一副本的私人资料。
 
 ## 核心原则
 
@@ -96,6 +97,33 @@ async with unit_of_work_factory() as unit_of_work:
 完整表结构、不变量、并发和幂等约定见
 [L1 设计规格](docs/superpowers/specs/2026-07-28-l1-domain-sqlite-control-plane-design.md)。
 
+## 当前可用：L2 Obsidian 采集与恢复
+
+L2 提供手动全量扫描、官方 Obsidian CLI 只读 inventory、稳定双读、内容寻址快照、
+Markdown 结构解析、安全信号、确定性变化规划、逐项原子应用，以及独立 SQLite
+checkpoint 支持的 LangGraph 故障恢复。采集过程不调用 LLM 或网络服务。
+
+运行前需要安装并启用 Obsidian 1.12.7+ 官方 CLI，然后显式配置一个本地 Vault。
+真实 Vault ID、路径、数据库和快照均只能保存在本地环境，不能写入或提交仓库：
+
+```powershell
+uv sync --extra dev
+$env:TRUSTKB_INGESTION_VAULT_ID = "<your-vault-id>"
+$env:TRUSTKB_INGESTION_VAULT_PATH = "<absolute-path-to-your-vault>"
+$env:TRUSTKB_INGESTION_ALLOWED_ROOTS = '["."]'
+uv run alembic upgrade head
+uv run trustworthy-kb-ingest
+```
+
+默认快照写入 `./storage/source-snapshots`，恢复 checkpoint 写入
+`./storage/checkpoints/ingestion.sqlite`；两个目录都已被 Git 忽略。命令只输出 run ID、
+状态和计数，不输出 Vault 路径或笔记正文。若进程在应用阶段中断，再次恢复同一
+checkpoint thread 时会依据 SQLite 采集账本跳过已完成项，避免重复版本和审计记录。
+
+首版只读取 `.md`，不修改 Vault；附件、监听模式、写回、Claim 提取与向量索引均属于
+后续层级。完整契约见
+[L2 设计规格](docs/superpowers/specs/2026-07-28-l2-ingestion-recovery-design.md)。
+
 ## 开发与验证
 
 ```powershell
@@ -106,6 +134,7 @@ uv run mypy
 uv run pytest -m "not integration" --cov=trustworthy_kb
 uv run python scripts/check_public_repository.py
 uv run alembic upgrade head
+uv build
 ```
 
 真实 sub2api 测试默认跳过。只有在当前进程已安全注入 key 后，才显式设置

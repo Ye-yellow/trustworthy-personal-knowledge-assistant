@@ -56,6 +56,7 @@ async def test_unit_of_work_requires_explicit_commit(tmp_path: Path) -> None:
             assert await unit_of_work.sources.get_source(committed.id) == committed
             with pytest.raises(RecordNotFoundError):
                 await unit_of_work.sources.get_source(rolled_back.id)
+            assert unit_of_work.ingestion is not None
     finally:
         await engine.dispose()
 

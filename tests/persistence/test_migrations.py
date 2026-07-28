@@ -25,6 +25,8 @@ EXPECTED_CONTROL_TABLES = {
     "evidence",
     "evidence_families",
     "idempotency_records",
+    "ingestion_items",
+    "ingestion_runs",
     "index_generations",
     "index_jobs",
     "knowledge_changes",
@@ -36,6 +38,7 @@ EXPECTED_CONTROL_TABLES = {
     "quality_checks",
     "source_versions",
     "sources",
+    "source_locations",
 }
 
 
@@ -76,6 +79,14 @@ def test_upgrade_downgrade_and_reupgrade_create_complete_schema(tmp_path: Path) 
         }
     finally:
         engine.dispose()
+
+
+def test_online_migration_creates_missing_database_parent(tmp_path: Path) -> None:
+    database_path = tmp_path / "new" / "nested" / "migration.db"
+
+    command.upgrade(migration_config(database_path), "head")
+
+    assert database_path.is_file()
 
 
 def test_operation_log_migration_triggers_reject_update_and_delete(tmp_path: Path) -> None:
@@ -223,4 +234,6 @@ def test_initial_migration_supports_offline_sql(tmp_path: Path) -> None:
     sql = output.getvalue()
     assert "CREATE TABLE sources" in sql
     assert "CREATE TABLE operation_logs" in sql
+    assert "CREATE TABLE ingestion_runs" in sql
+    assert "CREATE TABLE source_locations" in sql
     assert "trg_operation_logs_no_update" in sql

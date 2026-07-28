@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import ClassVar, Self
 
 from pydantic_core import core_schema
 from ulid import ULID
@@ -25,7 +25,7 @@ class TypedId(str):
         return str.__new__(cls, f"{cls.prefix}{canonical_ulid}")
 
     @classmethod
-    def generate(cls) -> TypedId:
+    def generate(cls) -> Self:
         """Generate a new typed identifier."""
 
         return cls(f"{cls.prefix}{ULID()}")
@@ -104,6 +104,14 @@ class IdempotencyRecordId(TypedId):
     prefix = "idem_"
 
 
+class IngestionRunId(TypedId):
+    prefix = "ingrun_"
+
+
+class IngestionItemId(TypedId):
+    prefix = "ingitem_"
+
+
 ALL_ID_TYPES: tuple[type[TypedId], ...] = (
     SourceId,
     SourceVersionId,
@@ -121,6 +129,8 @@ ALL_ID_TYPES: tuple[type[TypedId], ...] = (
     ModelRunId,
     OperationLogId,
     IdempotencyRecordId,
+    IngestionRunId,
+    IngestionItemId,
 )
 
 
@@ -143,6 +153,8 @@ __all__ = [
     "IdempotencyRecordId",
     "IndexGenerationId",
     "IndexJobId",
+    "IngestionItemId",
+    "IngestionRunId",
     "KnowledgeChangeId",
     "KnowledgeNoteId",
     "LineageEdgeId",
