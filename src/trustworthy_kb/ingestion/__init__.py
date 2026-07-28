@@ -24,11 +24,18 @@ from trustworthy_kb.ingestion.hashing import (
     sha256_text,
     vault_id_hash,
 )
+from trustworthy_kb.ingestion.manifest import IngestionManifest, ManifestEntry, build_manifest
 from trustworthy_kb.ingestion.markdown import MarkdownBlockParser, normalize_block_text
 from trustworthy_kb.ingestion.paths import (
     normalize_vault_relative_path,
     path_is_in_scope,
     resolve_vault_markdown,
+)
+from trustworthy_kb.ingestion.planner import (
+    IngestionPlan,
+    IngestionPlanItem,
+    KnownSource,
+    plan_ingestion,
 )
 from trustworthy_kb.ingestion.reader import StableMarkdownReader, decode_markdown
 from trustworthy_kb.ingestion.safety import (
@@ -54,6 +61,11 @@ __all__ = [
     "IngestionAlreadyRunningError",
     "IngestionConfigurationError",
     "IngestionError",
+    "IngestionManifest",
+    "IngestionPlan",
+    "IngestionPlanItem",
+    "KnownSource",
+    "ManifestEntry",
     "MarkdownBlockParser",
     "MarkdownParseError",
     "ObsidianCliUnavailableError",
@@ -73,6 +85,7 @@ __all__ = [
     "UnsupportedEncodingError",
     "VaultFileObservation",
     "VaultPathPolicyError",
+    "build_manifest",
     "canonical_json",
     "canonical_json_hash",
     "canonical_source_uri",
@@ -82,6 +95,7 @@ __all__ = [
     "normalize_vault_relative_path",
     "path_is_in_scope",
     "path_key",
+    "plan_ingestion",
     "resolve_vault_markdown",
     "sha256_bytes",
     "sha256_text",
