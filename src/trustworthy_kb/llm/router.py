@@ -42,5 +42,6 @@ class ModelRouter:
             ModelPurpose.EVIDENCE_VERIFICATION: self._settings.verifier_model,
             ModelPurpose.CURATION: self._settings.curation_model,
             ModelPurpose.ANSWER_GENERATION: self._settings.answer_model,
+            ModelPurpose.EVIDENCE_SEARCH: self._settings.model,
         }[purpose]
         return override or self._settings.model

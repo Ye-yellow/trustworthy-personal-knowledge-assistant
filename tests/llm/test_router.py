@@ -24,11 +24,14 @@ def test_router_selects_purpose_override_and_caches_by_model() -> None:
     second = router.route(ModelPurpose.CLAIM_EXTRACTION)
     verifier = router.route(ModelPurpose.EVIDENCE_VERIFICATION)
     answer = router.route(ModelPurpose.ANSWER_GENERATION)
+    search = router.route(ModelPurpose.EVIDENCE_SEARCH)
 
     assert first.chat_model is second.chat_model
     assert first.model_name == "fast-model"
     assert verifier.model_name == "strong-model"
     assert answer.model_name == "gpt-5.5"
+    assert search.model_name == "gpt-5.5"
+    assert search.chat_model is answer.chat_model
     assert first.provider == "sub2api"
     assert created == ["fast-model", "strong-model", "gpt-5.5"]
 

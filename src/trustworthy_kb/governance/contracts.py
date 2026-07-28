@@ -8,7 +8,14 @@ from typing import Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
-from trustworthy_kb.domain import ClaimType, Sensitivity, SourceVersionId, TrustTier
+from trustworthy_kb.domain import (
+    ClaimType,
+    EvidenceStance,
+    RiskLevel,
+    Sensitivity,
+    SourceVersionId,
+    TrustTier,
+)
 
 
 class StrictContract(BaseModel):
@@ -67,6 +74,10 @@ class ClaimDraft(StrictContract):
         if self.valid_from and self.valid_to and self.valid_to < self.valid_from:
             raise ValueError("valid_to must not be before valid_from")
         return self
+
+
+class ClaimExtractionOutput(StrictContract):
+    claims: tuple[ClaimDraft, ...]
 
 
 class SearchIntent(StrEnum):
@@ -161,8 +172,59 @@ class EvidencePack(StrictContract):
     truncation_reason: str | None = None
 
 
+class CandidateVerification(StrictContract):
+    candidate_id: str = Field(min_length=1, max_length=100)
+    stance: EvidenceStance
+    supported_claim_fields: tuple[str, ...]
+    evidence_coverage: float = Field(ge=0, le=1)
+    scope_match: bool | None
+    version_match: bool | None
+    freshness_match: bool | None
+    relevance: float = Field(ge=0, le=1)
+    reason_codes: tuple[str, ...] = Field(min_length=1)
+
+
+class EvidenceVerificationOutput(StrictContract):
+    results: tuple[CandidateVerification, ...]
+
+    @model_validator(mode="after")
+    def _candidate_ids_are_unique(self) -> EvidenceVerificationOutput:
+        identifiers = [result.candidate_id for result in self.results]
+        if len(identifiers) != len(set(identifiers)):
+            raise ValueError("candidate verification IDs must be unique")
+        return self
+
+
+class QualityMetric(StrictContract):
+    state: Literal["PASS", "FAIL", "UNKNOWN", "NOT_APPLICABLE"]
+    score: float | None = Field(default=None, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _score_matches_state(self) -> QualityMetric:
+        if self.state in {"UNKNOWN", "NOT_APPLICABLE"} and self.score is not None:
+            raise ValueError("unknown or not-applicable metrics must not have a score")
+        if self.state in {"PASS", "FAIL"} and self.score is None:
+            raise ValueError("pass or fail metrics require a score")
+        return self
+
+
+class QualityDimensions(StrictContract):
+    evidence_coverage: QualityMetric
+    source_reliability: QualityMetric
+    source_independence: QualityMetric
+    source_agreement: QualityMetric
+    freshness: QualityMetric
+    version_match: QualityMetric
+    extraction_quality: QualityMetric
+    verifier_agreement: QualityMetric
+    risk_level: RiskLevel
+    safety_status: Literal["SAFE", "UNSAFE", "UNKNOWN"]
+
+
 __all__ = [
+    "CandidateVerification",
     "ClaimDraft",
+    "ClaimExtractionOutput",
     "ClaimObject",
     "ClaimOriginSpan",
     "ClaimScope",
@@ -170,9 +232,12 @@ __all__ = [
     "EvidencePackCandidate",
     "EvidenceSearchHit",
     "EvidenceSearchRequest",
+    "EvidenceVerificationOutput",
     "FetchedEvidenceBlock",
     "FetchedEvidenceDocument",
     "PublicClaim",
+    "QualityDimensions",
+    "QualityMetric",
     "SearchCapabilities",
     "SearchIntent",
 ]

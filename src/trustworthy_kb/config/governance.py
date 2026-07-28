@@ -31,6 +31,7 @@ class GovernanceSettings(BaseSettings):
     max_claims_per_document: Annotated[int, Field(ge=1, le=1000)] = 100
     max_concurrency: Annotated[int, Field(ge=1, le=32)] = 4
     max_retries: Annotated[int, Field(ge=0, le=10)] = 2
+    max_extraction_characters: Annotated[int, Field(ge=1000, le=5_000_000)] = 200_000
     evidence_snapshot_root: SecretStr = SecretStr("./storage/evidence-snapshots")
     checkpoint_path: SecretStr = SecretStr("./storage/checkpoints/governance.sqlite")
 
