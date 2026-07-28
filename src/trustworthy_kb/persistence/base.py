@@ -89,6 +89,21 @@ _ENTITY_PREFIXES = {
     EntityType.MODEL_RUN: "modelrun_",
 }
 
+ENTITY_TABLE_NAMES = {
+    EntityType.SOURCE: "sources",
+    EntityType.SOURCE_VERSION: "source_versions",
+    EntityType.CONTENT_BLOCK: "content_blocks",
+    EntityType.CLAIM: "claims",
+    EntityType.EVIDENCE: "evidence",
+    EntityType.QUALITY_CHECK: "quality_checks",
+    EntityType.KNOWLEDGE_CHANGE: "knowledge_changes",
+    EntityType.KNOWLEDGE_NOTE: "knowledge_notes",
+    EntityType.CURATED_VERSION: "curated_versions",
+    EntityType.INDEX_GENERATION: "index_generations",
+    EntityType.INDEX_JOB: "index_jobs",
+    EntityType.MODEL_RUN: "model_runs",
+}
+
 
 def entity_id_check(type_column: str, id_column: str) -> str:
     """Return a CHECK expression matching an entity type to its ID prefix."""
@@ -100,6 +115,7 @@ def entity_id_check(type_column: str, id_column: str) -> str:
 
 
 __all__ = [
+    "ENTITY_TABLE_NAMES",
     "NAMING_CONVENTION",
     "Base",
     "CreatedAtMixin",

@@ -1,6 +1,7 @@
 """Public domain contracts for the trustworthy knowledge control plane."""
 
 from trustworthy_kb.domain.audit import IdempotencyRecord, ModelRunRecord, OperationLogRecord
+from trustworthy_kb.domain.audit_hash import canonical_audit_json, operation_log_entry_hash
 from trustworthy_kb.domain.enums import (
     ActorType,
     ChangeType,
@@ -125,6 +126,8 @@ __all__ = [
     "TrustTier",
     "TypedId",
     "can_transition",
+    "canonical_audit_json",
+    "operation_log_entry_hash",
     "parse_typed_id",
     "require_transition",
 ]
