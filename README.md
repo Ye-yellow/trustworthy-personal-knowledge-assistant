@@ -249,6 +249,23 @@ uv build
 `uv run pytest tests/integration/test_milvus.py -q`，测试只写入一个随机命名的临时 Collection，
 并在完成后精确删除该 Collection。
 
+真实 BGE 测试会首次下载较大的本地权重，因此也必须显式开启。下载器只请求推理所需文件，
+跳过 ONNX 等替代资产；也可以把 `TRUSTKB_RETRIEVAL_EMBEDDING_MODEL` 和
+`TRUSTKB_RETRIEVAL_RERANKER_MODEL` 指向已校验的本地目录：
+
+```powershell
+$env:TRUSTKB_RUN_BGE_INTEGRATION = "1"
+uv run --extra bge pytest tests/integration/test_bge.py -q
+```
+
+完整 P0 合成闭环会同时调用本机 sub2api、BGE、Milvus 和临时 SQLite，并验证最终引用与
+数据库正文隔离；上游账户必须可用，失败时测试和服务都会安全拒答：
+
+```powershell
+$env:TRUSTKB_RUN_P0_INTEGRATION = "1"
+uv run --extra retrieval --extra bge pytest tests/integration/test_p0_trusted_answer.py -q
+```
+
 ## 公开仓库隐私规则
 
 本仓库只接受源代码、通用配置、架构文档和合成测试数据。以下内容不得提交：

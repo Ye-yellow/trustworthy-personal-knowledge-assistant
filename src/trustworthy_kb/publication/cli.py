@@ -89,6 +89,7 @@ class _Runtime:
             dimension=self.retrieval.embedding_dimension,
             device=self.retrieval.embedding_device,
             batch_size=self.retrieval.embedding_batch_size,
+            cache_dir=self.retrieval.model_cache_root_value / "hub",
         )
 
 
@@ -269,6 +270,7 @@ async def _retrieve(
             model_name=runtime.retrieval.reranker_model,
             device=runtime.retrieval.reranker_device,
             batch_size=runtime.retrieval.reranker_batch_size,
+            cache_dir=runtime.retrieval.model_cache_root_value / "hub",
         )
     )
     result = await HybridRetriever(

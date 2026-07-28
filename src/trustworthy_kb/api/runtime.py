@@ -64,6 +64,7 @@ class AnswerRuntime:
             dimension=self.retrieval.embedding_dimension,
             device=self.retrieval.embedding_device,
             batch_size=self.retrieval.embedding_batch_size,
+            cache_dir=self.retrieval.model_cache_root_value / "hub",
         )
         reranker = (
             None
@@ -72,6 +73,7 @@ class AnswerRuntime:
                 model_name=self.retrieval.reranker_model,
                 device=self.retrieval.reranker_device,
                 batch_size=self.retrieval.reranker_batch_size,
+                cache_dir=self.retrieval.model_cache_root_value / "hub",
             )
         )
         audited = AuditedModelGateway(
