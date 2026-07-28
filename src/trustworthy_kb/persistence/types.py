@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from sqlalchemy import String
 from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.types import TypeDecorator
 
+from trustworthy_kb.domain.ids import TypedId, parse_typed_id
+
 _UTC_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
+IdT = TypeVar("IdT", bound=TypedId)
 
 
 class UTCDateTime(TypeDecorator[datetime]):
@@ -50,4 +53,48 @@ class CanonicalJson(TypeDecorator[dict[str, Any]]):
     cache_ok = True
 
 
-__all__ = ["CanonicalJson", "UTCDateTime"]
+class TypedIdType(TypeDecorator[IdT]):
+    """Persist a concrete typed ID as text and restore its runtime type."""
+
+    impl = String
+    cache_ok = True
+
+    def __init__(self, id_type: type[IdT]) -> None:
+        self.id_type = id_type
+        super().__init__(length=len(id_type.prefix) + 26)
+
+    def process_bind_param(self, value: IdT | str | None, _dialect: Dialect) -> str | None:
+        if value is None:
+            return None
+        return str(self.id_type(str(value)))
+
+    def process_result_value(self, value: str | None, _dialect: Dialect) -> IdT | None:
+        return self.id_type(value) if value is not None else None
+
+    @property
+    def python_type(self) -> type[IdT]:
+        return self.id_type
+
+
+class AnyTypedIdType(TypeDecorator[TypedId]):
+    """Persist and restore any registered typed ID for polymorphic references."""
+
+    impl = String(64)
+    cache_ok = True
+
+    def process_bind_param(
+        self,
+        value: TypedId | str | None,
+        _dialect: Dialect,
+    ) -> str | None:
+        return str(parse_typed_id(str(value))) if value is not None else None
+
+    def process_result_value(self, value: str | None, _dialect: Dialect) -> TypedId | None:
+        return parse_typed_id(value) if value is not None else None
+
+    @property
+    def python_type(self) -> type[TypedId]:
+        return TypedId
+
+
+__all__ = ["AnyTypedIdType", "CanonicalJson", "TypedIdType", "UTCDateTime"]
