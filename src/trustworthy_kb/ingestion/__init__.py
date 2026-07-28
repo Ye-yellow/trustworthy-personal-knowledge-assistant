@@ -24,6 +24,7 @@ from trustworthy_kb.ingestion.hashing import (
     sha256_text,
     vault_id_hash,
 )
+from trustworthy_kb.ingestion.inventory import VaultInventory, VaultInventoryResult
 from trustworthy_kb.ingestion.manifest import IngestionManifest, ManifestEntry, build_manifest
 from trustworthy_kb.ingestion.markdown import MarkdownBlockParser, normalize_block_text
 from trustworthy_kb.ingestion.paths import (
@@ -38,6 +39,11 @@ from trustworthy_kb.ingestion.planner import (
     plan_ingestion,
 )
 from trustworthy_kb.ingestion.reader import StableMarkdownReader, decode_markdown
+from trustworthy_kb.ingestion.runner import (
+    IngestionReport,
+    ManualIngestionRunner,
+    build_manual_runner,
+)
 from trustworthy_kb.ingestion.safety import (
     DocumentSafetyScanner,
     SafetyCategory,
@@ -69,9 +75,11 @@ __all__ = [
     "IngestionManifest",
     "IngestionPlan",
     "IngestionPlanItem",
+    "IngestionReport",
     "IngestionService",
     "KnownSource",
     "ManifestEntry",
+    "ManualIngestionRunner",
     "MarkdownBlockParser",
     "MarkdownParseError",
     "ObsidianCliUnavailableError",
@@ -91,8 +99,11 @@ __all__ = [
     "UnstableFileError",
     "UnsupportedEncodingError",
     "VaultFileObservation",
+    "VaultInventory",
+    "VaultInventoryResult",
     "VaultPathPolicyError",
     "build_manifest",
+    "build_manual_runner",
     "canonical_json",
     "canonical_json_hash",
     "canonical_source_uri",
