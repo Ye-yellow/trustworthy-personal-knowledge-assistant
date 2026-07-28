@@ -89,11 +89,21 @@ async def seed_source(repository: SourceRepository) -> tuple[SourceVersionId, Co
             media_type="text/plain",
             captured_at=timestamp,
             original_path="seed.txt",
-            status=SourceVersionStatus.READY,
+            status=SourceVersionStatus.CAPTURED,
             revision=1,
             created_at=timestamp,
             updated_at=timestamp,
         )
+    )
+    parsed = await repository.transition_source_version(
+        version_id,
+        SourceVersionStatus.PARSED,
+        expected_revision=1,
+    )
+    await repository.transition_source_version(
+        version_id,
+        SourceVersionStatus.READY,
+        expected_revision=parsed.revision,
     )
     await repository.add_content_blocks(
         [

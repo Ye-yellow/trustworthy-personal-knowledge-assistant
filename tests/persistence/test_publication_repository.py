@@ -77,11 +77,21 @@ async def add_source_version(
             media_type="text/plain",
             captured_at=timestamp,
             original_path=f"{uri.rsplit('/', 1)[-1]}.txt",
-            status=SourceVersionStatus.READY,
+            status=SourceVersionStatus.CAPTURED,
             revision=1,
             created_at=timestamp,
             updated_at=timestamp,
         )
+    )
+    parsed = await repository.transition_source_version(
+        version_id,
+        SourceVersionStatus.PARSED,
+        expected_revision=1,
+    )
+    await repository.transition_source_version(
+        version_id,
+        SourceVersionStatus.READY,
+        expected_revision=parsed.revision,
     )
     return source_id, version_id
 
@@ -287,17 +297,21 @@ async def test_publication_repository_enforces_cross_record_invariants_and_cas(
             generation_number=1,
             embedding_model="embedding-v1",
             chunker_version="chunker-v1",
-            status=IndexGenerationStatus.ACTIVE,
+            status=IndexGenerationStatus.STAGING,
             revision=1,
             created_at=now(),
-            activated_at=now(),
         )
         await repository.add_index_generation(generation)
+        active_generation = await repository.transition_index_generation(
+            generation.id,
+            IndexGenerationStatus.ACTIVE,
+            expected_revision=1,
+        )
         with pytest.raises(InvalidStateTransitionError):
             await repository.transition_index_generation(
                 generation.id,
                 IndexGenerationStatus.STAGING,
-                expected_revision=1,
+                expected_revision=active_generation.revision,
             )
     finally:
         await session.rollback()

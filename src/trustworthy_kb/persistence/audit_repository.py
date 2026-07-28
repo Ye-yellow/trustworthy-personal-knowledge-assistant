@@ -53,7 +53,7 @@ class AuditRepository:
         self._session = session
 
     async def start_model_run(self, record: ModelRunRecord) -> ModelRunRecord:
-        if record.status is not ModelRunStatus.STARTED:
+        if record.revision != 1 or record.status is not ModelRunStatus.STARTED:
             raise invariant("model run start", record.id)
         row = ModelRunTable(**record.model_dump(mode="python"))
         self._session.add(row)
@@ -75,6 +75,8 @@ class AuditRepository:
         error_category: str | None = None,
     ) -> ModelRunRecord:
         row = await self._required_model_run(model_run_id)
+        if row.revision != expected_revision:
+            raise concurrent("model run", model_run_id)
         require_transition(row.status, target_status)
         if target_status is ModelRunStatus.SUCCEEDED and output_hash is None:
             raise invariant("model run completion", model_run_id)
@@ -284,6 +286,8 @@ class AuditRepository:
         error_category: str | None,
     ) -> IdempotencyRecord:
         row = await self._required_idempotency(record_id)
+        if row.revision != expected_revision:
+            raise concurrent("idempotency", record_id)
         if row.status is IdempotencyStatus.UNKNOWN and not reconcile_unknown:
             raise invariant("idempotency reconciliation", record_id)
         require_transition(row.status, target_status)

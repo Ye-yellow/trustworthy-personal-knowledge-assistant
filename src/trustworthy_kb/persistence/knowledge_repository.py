@@ -48,6 +48,13 @@ class KnowledgeRepository:
         self._session = session
 
     async def add_claim(self, record: ClaimRecord) -> ClaimRecord:
+        if (
+            record.revision != 1
+            or record.status is not ClaimStatus.PROPOSED
+            or record.current_quality_check_id is not None
+            or record.deleted_at is not None
+        ):
+            raise invariant("claim creation", record.id)
         row = ClaimTable(**record.model_dump(mode="python"))
         self._session.add(row)
         await flush_safely(self._session, entity="claim", identifier=record.id)
@@ -109,6 +116,8 @@ class KnowledgeRepository:
         expected_revision: int,
     ) -> ClaimRecord:
         row = await self._claim_row(claim_id)
+        if row.revision != expected_revision:
+            raise concurrent("claim", claim_id)
         require_transition(row.status, target_status)
         return await self._update_claim(
             claim_id,
@@ -123,7 +132,9 @@ class KnowledgeRepository:
         *,
         expected_revision: int,
     ) -> ClaimRecord:
-        await self._claim_row(claim_id)
+        claim = await self._claim_row(claim_id)
+        if claim.revision != expected_revision:
+            raise concurrent("claim", claim_id)
         quality_check = await self._session.get(QualityCheckTable, quality_check_id)
         if quality_check is None or quality_check.claim_id != claim_id:
             raise invariant("claim quality check", quality_check_id)
@@ -140,7 +151,9 @@ class KnowledgeRepository:
         expected_revision: int,
         deleted_at: datetime | None = None,
     ) -> ClaimRecord:
-        await self._claim_row(claim_id)
+        claim = await self._claim_row(claim_id)
+        if claim.revision != expected_revision:
+            raise concurrent("claim", claim_id)
         return await self._update_claim(
             claim_id,
             expected_revision,

@@ -61,6 +61,8 @@ class PublicationRepository:
         self,
         record: KnowledgeChangeRecord,
     ) -> KnowledgeChangeRecord:
+        if record.revision != 1 or record.status is not KnowledgeChangeStatus.RECEIVED:
+            raise invariant("knowledge change creation", record.id)
         target = await self._session.get(SourceVersionTable, record.target_version_id)
         if target is None or target.source_id != record.source_id:
             raise invariant("knowledge change target", record.id)
@@ -81,6 +83,8 @@ class PublicationRepository:
         expected_revision: int,
     ) -> KnowledgeChangeRecord:
         row = await self._required_row(KnowledgeChangeTable, change_id, "knowledge change")
+        if row.revision != expected_revision:
+            raise concurrent("knowledge change", change_id)
         require_transition(row.status, target_status)
         updated = await self._cas(
             update(KnowledgeChangeTable)
@@ -101,6 +105,13 @@ class PublicationRepository:
         return to_record(KnowledgeChangeRecord, updated)
 
     async def add_note(self, record: KnowledgeNoteRecord) -> KnowledgeNoteRecord:
+        if (
+            record.revision != 1
+            or record.current_curated_version_id is not None
+            or record.active_index_generation_id is not None
+            or record.deleted_at is not None
+        ):
+            raise invariant("knowledge note creation", record.id)
         row = KnowledgeNoteTable(**record.model_dump(mode="python"))
         self._session.add(row)
         await flush_safely(self._session, entity="knowledge note", identifier=record.id)
@@ -110,6 +121,8 @@ class PublicationRepository:
         self,
         record: CuratedVersionRecord,
     ) -> CuratedVersionRecord:
+        if record.revision != 1 or record.status is not CuratedVersionStatus.DRAFT:
+            raise invariant("curated version creation", record.id)
         await self._note_row(record.note_id)
         await self._required_row(
             KnowledgeChangeTable,
@@ -129,6 +142,8 @@ class PublicationRepository:
         expected_revision: int,
     ) -> CuratedVersionRecord:
         row = await self._curated_row(version_id)
+        if row.revision != expected_revision:
+            raise concurrent("curated version", version_id)
         require_transition(row.status, target_status)
         updated = await self._update_curated_version(
             version_id,
@@ -195,6 +210,8 @@ class PublicationRepository:
         self,
         record: IndexGenerationRecord,
     ) -> IndexGenerationRecord:
+        if record.revision != 1 or record.status is not IndexGenerationStatus.STAGING:
+            raise invariant("index generation creation", record.id)
         row = IndexGenerationTable(**record.model_dump(mode="python"))
         self._session.add(row)
         await flush_safely(self._session, entity="index generation", identifier=record.id)
@@ -212,6 +229,8 @@ class PublicationRepository:
             generation_id,
             "index generation",
         )
+        if row.revision != expected_revision:
+            raise concurrent("index generation", generation_id)
         require_transition(row.status, target_status)
         values: dict[str, object] = {
             "status": target_status,
@@ -234,6 +253,8 @@ class PublicationRepository:
         return to_record(IndexGenerationRecord, updated)
 
     async def add_index_job(self, record: IndexJobRecord) -> IndexJobRecord:
+        if record.revision != 1 or record.status is not IndexJobStatus.PENDING:
+            raise invariant("index job creation", record.id)
         if not await self._entity_exists(record.object_type, record.object_id):
             raise invariant("index job object", record.id)
         await self._required_row(IndexGenerationTable, record.generation_id, "index generation")
@@ -251,6 +272,8 @@ class PublicationRepository:
         error_category: str | None = None,
     ) -> IndexJobRecord:
         row = await self._required_row(IndexJobTable, job_id, "index job")
+        if row.revision != expected_revision:
+            raise concurrent("index job", job_id)
         require_transition(row.status, target_status)
         updated = await self._cas(
             update(IndexJobTable)

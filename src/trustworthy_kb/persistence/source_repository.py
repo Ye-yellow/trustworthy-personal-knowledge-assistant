@@ -44,6 +44,12 @@ class SourceRepository:
         self._session = session
 
     async def add_source(self, record: SourceRecord) -> SourceRecord:
+        if (
+            record.revision != 1
+            or record.current_version_id is not None
+            or record.deleted_at is not None
+        ):
+            raise invariant("source creation", record.id)
         row = SourceTable(**record.model_dump(mode="python"))
         self._session.add(row)
         await flush_safely(self._session, entity="source", identifier=record.id)
@@ -65,6 +71,8 @@ class SourceRepository:
 
     async def append_source_version(self, record: SourceVersionRecord) -> SourceVersionRecord:
         await self.get_source(record.source_id)
+        if record.revision != 1 or record.status is not SourceVersionStatus.CAPTURED:
+            raise invariant("source version creation", record.id)
         row = SourceVersionTable(**record.model_dump(mode="python"))
         self._session.add(row)
         await flush_safely(self._session, entity="source version", identifier=record.id)
@@ -89,6 +97,8 @@ class SourceRepository:
         expected_revision: int,
     ) -> SourceVersionRecord:
         row = await self._source_version_row(version_id)
+        if row.revision != expected_revision:
+            raise concurrent("source version", version_id)
         require_transition(row.status, target_status)
         return await self._update_source_version(
             version_id,
@@ -103,7 +113,9 @@ class SourceRepository:
         *,
         expected_revision: int,
     ) -> SourceRecord:
-        await self.get_source(source_id)
+        source = await self.get_source(source_id)
+        if source.revision != expected_revision:
+            raise concurrent("source", source_id)
         version = await self._source_version_row(version_id)
         if version.source_id != source_id or version.status is not SourceVersionStatus.READY:
             raise invariant("source version activation", version_id)
@@ -120,7 +132,9 @@ class SourceRepository:
         expected_revision: int,
         deleted_at: datetime | None = None,
     ) -> SourceRecord:
-        await self.get_source(source_id)
+        source = await self.get_source(source_id)
+        if source.revision != expected_revision:
+            raise concurrent("source", source_id)
         return await self._update_source(
             source_id,
             expected_revision,

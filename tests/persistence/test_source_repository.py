@@ -164,15 +164,25 @@ async def test_source_repository_rejects_invalid_transition_and_stale_revision(
 ) -> None:
     engine, session, repository = await repository_for(tmp_path)
     source = source_record()
-    version = version_record(source.id, status=SourceVersionStatus.READY)
+    version = version_record(source.id)
     try:
         await repository.add_source(source)
         await repository.append_source_version(version)
+        parsed = await repository.transition_source_version(
+            version.id,
+            SourceVersionStatus.PARSED,
+            expected_revision=1,
+        )
+        ready = await repository.transition_source_version(
+            version.id,
+            SourceVersionStatus.READY,
+            expected_revision=parsed.revision,
+        )
         with pytest.raises(InvalidStateTransitionError):
             await repository.transition_source_version(
                 version.id,
                 SourceVersionStatus.PARSED,
-                expected_revision=1,
+                expected_revision=ready.revision,
             )
         with pytest.raises(ConcurrentModificationError):
             await repository.activate_source_version(

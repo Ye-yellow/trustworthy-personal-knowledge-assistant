@@ -36,6 +36,11 @@ jobs:
       - name: Type check
         run: uv run mypy
 
+      - name: Smoke test database migration
+        run: uv run alembic upgrade head
+        env:
+          TRUSTKB_DATABASE_URL: sqlite+aiosqlite:///./ci-control-plane.db
+
       - name: Run offline tests with coverage
         run: uv run pytest -m "not integration" --cov=trustworthy_kb --cov-report=term-missing
 
