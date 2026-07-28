@@ -19,6 +19,8 @@ EXPECTED_TABLES = {
     "evidence",
     "evidence_families",
     "idempotency_records",
+    "ingestion_items",
+    "ingestion_runs",
     "index_generations",
     "index_jobs",
     "knowledge_changes",
@@ -30,6 +32,7 @@ EXPECTED_TABLES = {
     "quality_checks",
     "source_versions",
     "sources",
+    "source_locations",
 }
 
 
@@ -66,6 +69,8 @@ async def test_metadata_creates_all_tables_indexes_and_checks(tmp_path: Path) ->
         assert table_names == EXPECTED_TABLES
         assert "uq_index_generations_one_active" in index_names
         assert "uq_knowledge_notes_live_path" in index_names
+        assert "uq_ingestion_runs_one_active" in index_names
+        assert "uq_source_locations_live_path" in index_names
     finally:
         await engine.dispose()
 
