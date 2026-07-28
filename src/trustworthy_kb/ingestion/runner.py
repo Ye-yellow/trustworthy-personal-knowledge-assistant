@@ -93,7 +93,7 @@ class ManualIngestionRunner:
             await self.apply_pending(run_id)
             return await self.reconcile_run(run_id)
         except Exception:
-            await self._fail_planning_run(run_id)
+            await self.fail_planning_run(run_id)
             raise
 
     async def begin_run(self, run_id: IngestionRunId) -> IngestionRunRecord:
@@ -295,7 +295,9 @@ class ManualIngestionRunner:
             )
             await unit_of_work.commit()
 
-    async def _fail_planning_run(self, run_id: IngestionRunId) -> None:
+    async def fail_planning_run(self, run_id: IngestionRunId) -> None:
+        """Fail only a run that has not yet frozen its item plan."""
+
         async with self._unit_of_work_factory() as unit_of_work:
             run = await unit_of_work.ingestion.get_run(run_id)
             if run.status is not IngestionRunStatus.PLANNING:

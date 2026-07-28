@@ -64,6 +64,11 @@ from trustworthy_kb.ingestion.types import (
     StableDocument,
     VaultFileObservation,
 )
+from trustworthy_kb.ingestion.workflow import (
+    IngestionWorkflowState,
+    build_ingestion_workflow,
+    run_ingestion_workflow,
+)
 
 __all__ = [
     "ContentAddressedSnapshotStore",
@@ -77,6 +82,7 @@ __all__ = [
     "IngestionPlanItem",
     "IngestionReport",
     "IngestionService",
+    "IngestionWorkflowState",
     "KnownSource",
     "ManifestEntry",
     "ManualIngestionRunner",
@@ -102,6 +108,7 @@ __all__ = [
     "VaultInventory",
     "VaultInventoryResult",
     "VaultPathPolicyError",
+    "build_ingestion_workflow",
     "build_manifest",
     "build_manual_runner",
     "canonical_json",
@@ -116,6 +123,7 @@ __all__ = [
     "path_key",
     "plan_ingestion",
     "resolve_vault_markdown",
+    "run_ingestion_workflow",
     "sha256_bytes",
     "sha256_text",
     "structural_diff",
