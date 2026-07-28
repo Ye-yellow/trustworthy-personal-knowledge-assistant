@@ -25,9 +25,8 @@ from trustworthy_kb.domain import (
     SourceVersionId,
     require_transition,
 )
-from trustworthy_kb.ingestion.errors import IngestionAlreadyRunningError
 from trustworthy_kb.persistence.base import utc_now
-from trustworthy_kb.persistence.errors import DuplicateRecordError
+from trustworthy_kb.persistence.errors import DuplicateRecordError, IngestionAlreadyRunningError
 from trustworthy_kb.persistence.ingestion_tables import (
     IngestionItemTable,
     IngestionRunTable,

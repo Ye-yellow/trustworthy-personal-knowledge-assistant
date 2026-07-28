@@ -39,6 +39,10 @@ class OperationInProgressError(PersistenceError):
     """An idempotent operation has a live lease owned by another caller."""
 
 
+class IngestionAlreadyRunningError(PersistenceError):
+    """A non-terminal ingestion run already exists for the requested Vault."""
+
+
 __all__ = [
     "ConcurrentModificationError",
     "DatabaseBusyError",
@@ -46,6 +50,7 @@ __all__ = [
     "DatabaseSchemaMismatchError",
     "DuplicateRecordError",
     "IdempotencyConflictError",
+    "IngestionAlreadyRunningError",
     "OperationInProgressError",
     "PersistenceError",
     "RecordNotFoundError",

@@ -81,6 +81,14 @@ def test_upgrade_downgrade_and_reupgrade_create_complete_schema(tmp_path: Path) 
         engine.dispose()
 
 
+def test_online_migration_creates_missing_database_parent(tmp_path: Path) -> None:
+    database_path = tmp_path / "new" / "nested" / "migration.db"
+
+    command.upgrade(migration_config(database_path), "head")
+
+    assert database_path.is_file()
+
+
 def test_operation_log_migration_triggers_reject_update_and_delete(tmp_path: Path) -> None:
     database_path = tmp_path / "immutable.db"
     command.upgrade(migration_config(database_path), "head")

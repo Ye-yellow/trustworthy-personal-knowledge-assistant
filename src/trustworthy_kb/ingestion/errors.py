@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from trustworthy_kb.persistence.errors import IngestionAlreadyRunningError
+
 
 class IngestionError(RuntimeError):
     """Base error for ingestion failures with redacted messages."""
@@ -41,10 +43,6 @@ class MarkdownParseError(IngestionError):
 
 class SnapshotIntegrityError(IngestionError):
     """A content-addressed snapshot failed integrity verification."""
-
-
-class IngestionAlreadyRunningError(IngestionError):
-    """A non-terminal run already exists for this Vault."""
 
 
 __all__ = [

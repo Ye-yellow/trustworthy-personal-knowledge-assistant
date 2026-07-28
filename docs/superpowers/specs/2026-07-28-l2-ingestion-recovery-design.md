@@ -285,7 +285,7 @@ manifest_hash 基于按 path_key 排序的 `(path_key, content_hash, size)` 列�
 
 唯一约束：`(run_id, path_key, action)` 和 `operation_id`。`safety_signals_json` 是只含类别和非负计数的 canonical JSON；错误字段只能保存枚举化类别。
 
-LangGraph `AsyncSqliteSaver` 使用独立 checkpoint 文件并自行管理 `checkpoints`、`checkpoint_writes` 等表，不纳入 Alembic metadata。依赖固定 `langgraph-checkpoint-sqlite>=3.0.1,<4`，禁止调用方提供任意 metadata filter key。
+LangGraph `AsyncSqliteSaver` 使用独立 checkpoint 文件并自行管理 `checkpoints`、`writes` 等表（表名以锁定版本为准），不纳入 Alembic metadata。依赖固定 `langgraph-checkpoint-sqlite>=3.0.1,<4`，禁止调用方提供任意 metadata filter key。
 
 迁移先创建 ingestion_runs，再创建 source_locations 和 ingestion_items，避免前向外键的建表顺序歧义；downgrade 采用相反顺序。另建 partial unique index，保证每个 vault_id_hash 只存在一个 PLANNING/APPLYING run。
 
