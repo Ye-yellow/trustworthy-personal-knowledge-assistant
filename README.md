@@ -2,7 +2,7 @@
 
 一个以 Obsidian 为人工可读知识真源、以 SQLite 管理知识血缘和状态、以 Milvus 提供可重建混合检索的可信个人知识助手。
 
-项目当前处于设计与工程基线阶段，尚不适合保存或处理真实私人资料。
+项目当前处于 L0 工程基线实现阶段，尚不适合保存或处理真实私人资料。
 
 ## 核心原则
 
@@ -33,6 +33,53 @@
 6. L5：API、可信问答与评估
 
 完整架构和验收定义见[设计规格](docs/superpowers/specs/2026-07-28-trustworthy-personal-knowledge-assistant-design.md)。
+
+## 当前可用：统一模型网关
+
+业务代码通过 `ModelGateway` 和 `ModelRouter` 调用 LangChain，不直接依赖
+`ChatOpenAI`、`ChatAnthropic` 或 `ChatOllama`。默认配置为本机 WSL sub2api 的
+OpenAI-compatible Chat Completions：
+
+```powershell
+uv sync --extra dev
+$env:TRUSTKB_LLM_API_KEY = "<your-local-sub2api-key>"
+uv run python examples/chat.py
+```
+
+四个业务用途可分别覆盖模型；未设置时均继承 `TRUSTKB_LLM_MODEL=gpt-5.5`：
+
+- `TRUSTKB_LLM_EXTRACTOR_MODEL`
+- `TRUSTKB_LLM_VERIFIER_MODEL`
+- `TRUSTKB_LLM_CURATION_MODEL`
+- `TRUSTKB_LLM_ANSWER_MODEL`
+
+Provider 切换只修改环境配置，业务调用代码不变：
+
+| 方式 | 安装 | 关键配置 |
+| --- | --- | --- |
+| WSL sub2api（默认） | `uv sync` | `PROVIDER=sub2api`、本机 Base URL、key |
+| OpenAI 官方 | 已包含 | `PROVIDER=openai`、模型、key，并清除自定义 Base URL |
+| Anthropic | `uv sync --extra anthropic` | `PROVIDER=anthropic`、Claude 模型、key |
+| Ollama 本地 | `uv sync --extra ollama` | `PROVIDER=ollama`、本地模型；无需 key |
+
+表中的配置名均需加 `TRUSTKB_LLM_` 前缀。可复制 `.env.example` 作为字段清单，
+但不要把真实值写回或提交该样例文件。详细边界见
+[模型接入设计](docs/superpowers/specs/2026-07-28-llm-provider-integration-design.md)。
+
+## 开发与验证
+
+```powershell
+uv sync --extra dev
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy
+uv run pytest -m "not integration" --cov=trustworthy_kb
+uv run python scripts/check_public_repository.py
+```
+
+真实 sub2api 测试默认跳过。只有在当前进程已安全注入 key 后，才显式设置
+`TRUSTKB_RUN_SUB2API_INTEGRATION=1` 并运行
+`uv run pytest tests/integration/test_sub2api.py`。测试只发送合成内容。
 
 ## 公开仓库隐私规则
 

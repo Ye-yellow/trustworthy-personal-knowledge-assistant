@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trustworthy-personal-knowledge-assistant"
+version = "0.1.0"
+description = "Evidence-aware personal knowledge assistant with auditable lineage."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "langchain>=1.0,<2",
+  "langchain-openai>=1.0,<2",
+  "pydantic>=2.12,<3",
+  "pydantic-settings>=2.12,<3",
+]
+
+[project.optional-dependencies]
+anthropic = ["langchain-anthropic>=1.0,<2"]
+dev = [
+  "httpx>=0.28,<1",
+  "mypy>=1.18,<2",
+  "pytest>=9,<10",
+  "pytest-asyncio>=1.3,<2",
+  "pytest-cov>=7,<8",
+  "ruff>=0.14,<1",
+]
+ollama = ["langchain-ollama>=1.0,<2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trustworthy_kb"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+  "integration: requires explicit external services and credentials",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["trustworthy_kb"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["trustworthy_kb"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+packages = ["trustworthy_kb"]
