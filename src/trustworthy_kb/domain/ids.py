@@ -104,6 +104,14 @@ class IdempotencyRecordId(TypedId):
     prefix = "idem_"
 
 
+class IngestionRunId(TypedId):
+    prefix = "ingrun_"
+
+
+class IngestionItemId(TypedId):
+    prefix = "ingitem_"
+
+
 ALL_ID_TYPES: tuple[type[TypedId], ...] = (
     SourceId,
     SourceVersionId,
@@ -121,6 +129,8 @@ ALL_ID_TYPES: tuple[type[TypedId], ...] = (
     ModelRunId,
     OperationLogId,
     IdempotencyRecordId,
+    IngestionRunId,
+    IngestionItemId,
 )
 
 
@@ -143,6 +153,8 @@ __all__ = [
     "IdempotencyRecordId",
     "IndexGenerationId",
     "IndexJobId",
+    "IngestionItemId",
+    "IngestionRunId",
     "KnowledgeChangeId",
     "KnowledgeNoteId",
     "LineageEdgeId",

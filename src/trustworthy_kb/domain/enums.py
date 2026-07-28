@@ -142,6 +142,32 @@ class IdempotencyStatus(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class IngestionAction(StrEnum):
+    CREATED = "CREATED"
+    UPDATED = "UPDATED"
+    MOVED = "MOVED"
+    DELETED = "DELETED"
+    UNCHANGED = "UNCHANGED"
+
+
+class IngestionRunStatus(StrEnum):
+    PLANNING = "PLANNING"
+    APPLYING = "APPLYING"
+    COMPLETED = "COMPLETED"
+    PARTIAL_FAILED = "PARTIAL_FAILED"
+    FAILED = "FAILED"
+    ABANDONED = "ABANDONED"
+
+
+class IngestionItemStatus(StrEnum):
+    PENDING = "PENDING"
+    APPLYING = "APPLYING"
+    SUCCEEDED = "SUCCEEDED"
+    SKIPPED = "SKIPPED"
+    QUARANTINED = "QUARANTINED"
+    FAILED = "FAILED"
+
+
 class EntityType(StrEnum):
     SOURCE = "source"
     SOURCE_VERSION = "source_version"
@@ -174,6 +200,9 @@ __all__ = [
     "IdempotencyStatus",
     "IndexGenerationStatus",
     "IndexJobStatus",
+    "IngestionAction",
+    "IngestionItemStatus",
+    "IngestionRunStatus",
     "KnowledgeChangeStatus",
     "ModelRunPurpose",
     "ModelRunStatus",

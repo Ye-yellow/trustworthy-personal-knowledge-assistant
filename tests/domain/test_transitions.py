@@ -8,6 +8,8 @@ from trustworthy_kb.domain import (
     IdempotencyStatus,
     IndexGenerationStatus,
     IndexJobStatus,
+    IngestionItemStatus,
+    IngestionRunStatus,
     InvalidStateTransitionError,
     KnowledgeChangeStatus,
     ModelRunStatus,
@@ -30,6 +32,8 @@ from trustworthy_kb.domain import (
         (KnowledgeChangeStatus.PUBLISH_INTENT, KnowledgeChangeStatus.ACTIVE),
         (ModelRunStatus.STARTED, ModelRunStatus.SUCCEEDED),
         (IdempotencyStatus.UNKNOWN, IdempotencyStatus.FAILED),
+        (IngestionRunStatus.PLANNING, IngestionRunStatus.APPLYING),
+        (IngestionItemStatus.FAILED, IngestionItemStatus.PENDING),
     ],
 )
 def test_declared_transitions_are_allowed(current: object, target: object) -> None:
@@ -48,6 +52,8 @@ def test_declared_transitions_are_allowed(current: object, target: object) -> No
         (KnowledgeChangeStatus.FAILED, KnowledgeChangeStatus.VALIDATING),
         (ModelRunStatus.SUCCEEDED, ModelRunStatus.STARTED),
         (IdempotencyStatus.SUCCEEDED, IdempotencyStatus.IN_PROGRESS),
+        (IngestionRunStatus.COMPLETED, IngestionRunStatus.APPLYING),
+        (IngestionItemStatus.SUCCEEDED, IngestionItemStatus.PENDING),
     ],
 )
 def test_undeclared_transitions_fail_closed(current: object, target: object) -> None:
