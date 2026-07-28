@@ -30,4 +30,24 @@ class SnapshotRef(IngestionValue):
     byte_size: int = Field(ge=0)
 
 
-__all__ = ["IngestionValue", "SnapshotRef", "StableDocument", "VaultFileObservation"]
+class ParsedBlock(IngestionValue):
+    ordinal: int = Field(ge=0)
+    block_type: str = Field(min_length=1)
+    anchor: str = Field(min_length=1)
+    text_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    character_count: int = Field(ge=0)
+    text: str
+
+
+class ParsedDocument(IngestionValue):
+    blocks: tuple[ParsedBlock, ...]
+
+
+__all__ = [
+    "IngestionValue",
+    "ParsedBlock",
+    "ParsedDocument",
+    "SnapshotRef",
+    "StableDocument",
+    "VaultFileObservation",
+]
