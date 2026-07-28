@@ -2,8 +2,8 @@
 
 一个以 Obsidian 为人工可读知识真源、以 SQLite 管理知识血缘和状态、以 Milvus 提供可重建混合检索的可信个人知识助手。
 
-项目已完成 L0 工程/模型网关基线、L1 领域/SQLite 控制面和 L2 本地 Markdown
-采集与故障恢复。知识治理、Obsidian 发布与检索仍未实现，因此当前版本尚不适合
+项目已完成 L0 工程/模型网关基线、L1 领域/SQLite 控制面、L2 本地 Markdown
+采集与故障恢复，以及 L3 Claim/证据/质量治理。Obsidian 发布与检索仍未实现，因此当前版本尚不适合
 生产使用或处理唯一副本的私人资料。
 
 ## 核心原则
@@ -70,8 +70,8 @@ Provider 切换只修改环境配置，业务调用代码不变：
 
 ## 当前可用：L1 SQLite 控制面
 
-L1 提供类型化 ULID、冻结领域记录、显式状态机、18 张控制面表、Alembic 迁移、
-四组异步 Repository、append-only 审计哈希链、幂等租约协议和显式提交的
+L1/L3 提供类型化 ULID、冻结领域记录、显式状态机、21 张控制面表、Alembic 迁移、
+六组异步 Repository、append-only 审计哈希链、幂等租约协议和显式提交的
 `SqliteUnitOfWork`。业务代码不直接消费 ORM Table，也不能由 Repository 隐式提交。
 
 首次初始化或拉取新 migration 后执行：
@@ -120,9 +120,40 @@ uv run trustworthy-kb-ingest
 状态和计数，不输出 Vault 路径或笔记正文。若进程在应用阶段中断，再次恢复同一
 checkpoint thread 时会依据 SQLite 采集账本跳过已完成项，避免重复版本和审计记录。
 
-首版只读取 `.md`，不修改 Vault；附件、监听模式、写回、Claim 提取与向量索引均属于
+首版只读取 `.md`，不修改 Vault；附件、监听模式、写回与向量索引均属于
 后续层级。完整契约见
 [L2 设计规格](docs/superpowers/specs/2026-07-28-l2-ingestion-recovery-design.md)。
+
+## 当前可用：L3 Claim、独立证据与质量治理
+
+L3 消费 L2 产生的 `KnowledgeChange`，完成结构化 Claim 提取、精确指纹去重、双向候选
+搜索、独立 HTTPS 获取、内容寻址证据包、逐候选引用锁定验证、确定性质量策略和人工复核。
+搜索使用 provider-neutral `EvidenceSearchGateway`；P0 默认通过 sub2api 的 Responses
+`web_search`，以后可注册其他实现而不改业务编排。
+
+模型返回的搜索摘要永远不作为证据。每个候选 URL 都必须经过 HTTPS/公网 DNS/连接对端
+复核、robots、重定向、MIME 和字节预算检查，再独立下载、哈希和快照。T1/T2 只能来自
+显式域名配置，未知域名默认 T4。模型只判断冻结证据候选的 stance、覆盖率和范围匹配；
+最终 verdict 完全由代码策略产生。高风险、证据不足和冲突结果进入人工复核，只有低风险
+结果允许自动裁决。
+
+本地 `.env` 会被 CLI 自动读取且已被 Git 忽略。先初始化迁移，然后运行所有待处理变化：
+
+```powershell
+uv run alembic upgrade head
+uv run trustworthy-kb-governance run
+uv run trustworthy-kb-governance review list
+uv run trustworthy-kb-governance review approve <review_request_id> --reason HUMAN_CONFIRMED
+```
+
+也可用 `run --change-id <knowledge_change_id>` 只处理一个变化。原始网页、提取文本、搜索
+manifest 和 EvidencePack 保存在 `./storage/evidence-snapshots`，LangGraph 只把 ID、状态和
+计数写入独立 `./storage/checkpoints/governance.sqlite`。抽取、验证和搜索均写入 hash-only
+`ModelRun` 审计记录，不把提示词、原文、API Key 或模型自由文本写入 SQLite。
+
+默认 `TRUSTKB_GOVERNANCE_T1_DOMAINS=[]` 和 `T2_DOMAINS=[]` 是有意的 fail-closed 设置；
+只有经过人工批准的权威域名才应加入对应 JSON 数组。完整策略见
+[L3 设计规格](docs/superpowers/specs/2026-07-28-l3-claim-evidence-quality-governance-design.md)。
 
 ## 开发与验证
 

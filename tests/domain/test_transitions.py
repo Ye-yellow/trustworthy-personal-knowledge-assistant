@@ -5,6 +5,8 @@ import pytest
 from trustworthy_kb.domain import (
     ClaimStatus,
     CuratedVersionStatus,
+    GovernanceItemStage,
+    GovernanceRunStatus,
     IdempotencyStatus,
     IndexGenerationStatus,
     IndexJobStatus,
@@ -13,6 +15,7 @@ from trustworthy_kb.domain import (
     InvalidStateTransitionError,
     KnowledgeChangeStatus,
     ModelRunStatus,
+    ReviewRequestStatus,
     SourceVersionStatus,
     can_transition,
     require_transition,
@@ -34,6 +37,11 @@ from trustworthy_kb.domain import (
         (IdempotencyStatus.UNKNOWN, IdempotencyStatus.FAILED),
         (IngestionRunStatus.PLANNING, IngestionRunStatus.APPLYING),
         (IngestionItemStatus.FAILED, IngestionItemStatus.PENDING),
+        (GovernanceRunStatus.PLANNING, GovernanceRunStatus.EXTRACTING),
+        (GovernanceItemStage.EXTRACTED, GovernanceItemStage.DECIDING),
+        (ReviewRequestStatus.PENDING, ReviewRequestStatus.APPROVED),
+        (KnowledgeChangeStatus.VALIDATING, KnowledgeChangeStatus.REVIEW_REQUIRED),
+        (ClaimStatus.PROPOSED, ClaimStatus.QUARANTINED),
     ],
 )
 def test_declared_transitions_are_allowed(current: object, target: object) -> None:

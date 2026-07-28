@@ -15,6 +15,7 @@ from trustworthy_kb.domain import (
     ContentBlockRecord,
     SourceId,
     SourceRecord,
+    SourceType,
     SourceVersionId,
     SourceVersionRecord,
     SourceVersionStatus,
@@ -82,6 +83,24 @@ class SourceRepository:
                 SourceLocationTable.vault_id_hash == vault_id_hash,
                 SourceLocationTable.path_key == path_key,
                 SourceLocationTable.deleted_at.is_(None),
+                SourceTable.deleted_at.is_(None),
+            )
+        )
+        return None if row is None else to_record(SourceRecord, row)
+
+    async def find_source_by_identity(
+        self,
+        source_type: SourceType,
+        canonical_uri: str,
+        owner: str,
+    ) -> SourceRecord | None:
+        """Return one live source by its database-enforced identity."""
+
+        row = await self._session.scalar(
+            select(SourceTable).where(
+                SourceTable.source_type == source_type,
+                SourceTable.canonical_uri == canonical_uri,
+                SourceTable.owner == owner,
                 SourceTable.deleted_at.is_(None),
             )
         )

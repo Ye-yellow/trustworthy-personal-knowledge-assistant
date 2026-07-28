@@ -104,6 +104,12 @@ async def test_source_repository_happy_path_and_soft_delete(tmp_path: Path) -> N
     try:
         assert await repository.add_source(source) == source
         assert await repository.get_source(source.id) == source
+        assert (
+            await repository.find_source_by_identity(
+                source.source_type, source.canonical_uri, source.owner
+            )
+            == source
+        )
         assert await repository.append_source_version(version) == version
         assert await repository.add_content_blocks([block]) == (block,)
 
@@ -128,6 +134,12 @@ async def test_source_repository_happy_path_and_soft_delete(tmp_path: Path) -> N
 
         deleted = await repository.mark_source_deleted(source.id, expected_revision=2)
         assert deleted.deleted_at is not None
+        assert (
+            await repository.find_source_by_identity(
+                source.source_type, source.canonical_uri, source.owner
+            )
+            is None
+        )
         with pytest.raises(RecordNotFoundError):
             await repository.get_source(source.id)
         assert (await repository.get_source(source.id, include_deleted=True)).id == source.id

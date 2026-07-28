@@ -56,6 +56,8 @@ def test_claim_record_validates_hashes_and_score_ranges() -> None:
     with pytest.raises(ValidationError):
         ClaimRecord(
             id=ClaimId.generate(),
+            claim_fingerprint="0" * 64,
+            claim_family_key="1" * 64,
             claim_type=ClaimType.FACT,
             subject="system",
             predicate="has",

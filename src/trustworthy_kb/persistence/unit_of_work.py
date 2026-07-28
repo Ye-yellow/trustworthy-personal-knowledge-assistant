@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from trustworthy_kb.persistence.audit_repository import AuditRepository
 from trustworthy_kb.persistence.errors import DatabaseConfigurationError
+from trustworthy_kb.persistence.governance_repository import GovernanceRepository
 from trustworthy_kb.persistence.ingestion_repository import IngestionRepository
 from trustworthy_kb.persistence.knowledge_repository import KnowledgeRepository
 from trustworthy_kb.persistence.publication_repository import PublicationRepository
@@ -29,6 +30,7 @@ class SqliteUnitOfWork:
         self.publication: PublicationRepository
         self.audit: AuditRepository
         self.ingestion: IngestionRepository
+        self.governance: GovernanceRepository
 
     async def __aenter__(self) -> SqliteUnitOfWork:
         if self._session is not None:
@@ -39,6 +41,7 @@ class SqliteUnitOfWork:
         self.publication = PublicationRepository(self._session)
         self.audit = AuditRepository(self._session)
         self.ingestion = IngestionRepository(self._session)
+        self.governance = GovernanceRepository(self._session)
         return self
 
     async def __aexit__(

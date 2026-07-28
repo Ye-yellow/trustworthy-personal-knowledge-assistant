@@ -24,6 +24,8 @@ EXPECTED_CONTROL_TABLES = {
     "curated_versions",
     "evidence",
     "evidence_families",
+    "governance_items",
+    "governance_runs",
     "idempotency_records",
     "ingestion_items",
     "ingestion_runs",
@@ -36,6 +38,7 @@ EXPECTED_CONTROL_TABLES = {
     "operation_logs",
     "quality_check_evidence",
     "quality_checks",
+    "review_requests",
     "source_versions",
     "sources",
     "source_locations",
@@ -236,4 +239,6 @@ def test_initial_migration_supports_offline_sql(tmp_path: Path) -> None:
     assert "CREATE TABLE operation_logs" in sql
     assert "CREATE TABLE ingestion_runs" in sql
     assert "CREATE TABLE source_locations" in sql
+    assert "CREATE TABLE governance_runs" in sql
+    assert "CREATE TABLE review_requests" in sql
     assert "trg_operation_logs_no_update" in sql

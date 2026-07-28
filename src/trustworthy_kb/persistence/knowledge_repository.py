@@ -14,11 +14,14 @@ from trustworthy_kb.domain import (
     ClaimOriginRecord,
     ClaimRecord,
     ClaimStatus,
+    ContentBlockId,
+    EvidenceFamilyId,
     EvidenceFamilyRecord,
     EvidenceRecord,
     QualityCheckEvidenceRecord,
     QualityCheckId,
     QualityCheckRecord,
+    SourceVersionId,
     require_transition,
 )
 from trustworthy_kb.persistence.base import utc_now
@@ -39,6 +42,7 @@ from trustworthy_kb.persistence.repository_base import (
     raise_operational_error,
     to_record,
 )
+from trustworthy_kb.persistence.source_tables import ContentBlockTable
 
 
 class KnowledgeRepository:
@@ -60,16 +64,80 @@ class KnowledgeRepository:
         await flush_safely(self._session, entity="claim", identifier=record.id)
         return to_record(ClaimRecord, row)
 
+    async def get_claim(self, claim_id: ClaimId) -> ClaimRecord:
+        return to_record(ClaimRecord, await self._claim_row(claim_id))
+
+    async def find_active_claim_by_fingerprint(self, claim_fingerprint: str) -> ClaimRecord | None:
+        row = await self._session.scalar(
+            select(ClaimTable).where(
+                ClaimTable.claim_fingerprint == claim_fingerprint,
+                ClaimTable.deleted_at.is_(None),
+                ClaimTable.status.not_in(
+                    (
+                        ClaimStatus.OUTDATED,
+                        ClaimStatus.REJECTED,
+                        ClaimStatus.SUPERSEDED,
+                        ClaimStatus.QUARANTINED,
+                    )
+                ),
+            )
+        )
+        return None if row is None else to_record(ClaimRecord, row)
+
+    async def list_claims_for_source_version(
+        self, source_version_id: SourceVersionId
+    ) -> tuple[ClaimRecord, ...]:
+        rows = await self._session.scalars(
+            select(ClaimTable)
+            .join(ClaimOriginTable, ClaimOriginTable.claim_id == ClaimTable.id)
+            .join(
+                ContentBlockTable,
+                ContentBlockTable.id == ClaimOriginTable.content_block_id,
+            )
+            .where(
+                ContentBlockTable.source_version_id == source_version_id,
+                ClaimTable.deleted_at.is_(None),
+            )
+            .distinct()
+            .order_by(ClaimTable.created_at, ClaimTable.id)
+        )
+        return tuple(to_record(ClaimRecord, row) for row in rows)
+
     async def attach_claim_origin(self, record: ClaimOriginRecord) -> ClaimOriginRecord:
         row = ClaimOriginTable(**record.model_dump(mode="python"))
         self._session.add(row)
         await flush_safely(self._session, entity="claim origin", identifier=record.claim_id)
         return to_record(ClaimOriginRecord, row)
 
+    async def has_claim_origin(self, claim_id: ClaimId, content_block_id: ContentBlockId) -> bool:
+        row = await self._session.scalar(
+            select(ClaimOriginTable.claim_id).where(
+                ClaimOriginTable.claim_id == claim_id,
+                ClaimOriginTable.content_block_id == content_block_id,
+            )
+        )
+        return row is not None
+
     async def add_evidence_family(self, record: EvidenceFamilyRecord) -> EvidenceFamilyRecord:
         row = EvidenceFamilyTable(**record.model_dump(mode="python"))
         self._session.add(row)
         await flush_safely(self._session, entity="evidence family", identifier=record.id)
+        return to_record(EvidenceFamilyRecord, row)
+
+    async def find_evidence_family_by_fingerprint(
+        self, origin_fingerprint: str
+    ) -> EvidenceFamilyRecord | None:
+        row = await self._session.scalar(
+            select(EvidenceFamilyTable).where(
+                EvidenceFamilyTable.origin_fingerprint == origin_fingerprint
+            )
+        )
+        return None if row is None else to_record(EvidenceFamilyRecord, row)
+
+    async def get_evidence_family(self, family_id: EvidenceFamilyId) -> EvidenceFamilyRecord:
+        row = await self._session.get(EvidenceFamilyTable, family_id)
+        if row is None:
+            raise not_found("evidence family", family_id)
         return to_record(EvidenceFamilyRecord, row)
 
     async def add_evidence(self, record: EvidenceRecord) -> EvidenceRecord:
