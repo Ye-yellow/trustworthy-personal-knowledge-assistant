@@ -1,0 +1,79 @@
+# Python bytecode and build outputs
+__pycache__/
+*.py[codz]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments and dependency caches
+.venv/
+venv/
+env/
+.uv-cache/
+.cache/
+
+# Tests, coverage, and static analysis
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Environment variables, credentials, and private keys
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.*
+secrets.*
+
+# Local databases and runtime state
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+/data/
+/storage/
+/blobs/
+/indexes/
+/milvus/
+/volumes/
+/models/
+/logs/
+/traces/
+/artifacts/
+
+# Personal knowledge and private evaluation material
+/vault/
+/Vault/
+/obsidian-vault/
+/.obsidian/
+/_Sources/
+/_AI/
+/Attachments/
+/evals/private/
+/fixtures/private/
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
+
