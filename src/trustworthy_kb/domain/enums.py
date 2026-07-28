@@ -107,6 +107,18 @@ class IndexJobStatus(StrEnum):
     DELETED = "DELETED"
 
 
+class PublicationRunStatus(StrEnum):
+    PLANNING = "PLANNING"
+    CURATING = "CURATING"
+    VAULT_STAGED = "VAULT_STAGED"
+    INDEXING = "INDEXING"
+    INDEX_VERIFIED = "INDEX_VERIFIED"
+    VAULT_PUBLISHED = "VAULT_PUBLISHED"
+    ACTIVATING = "ACTIVATING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
 class ChangeType(StrEnum):
     CREATED = "CREATED"
     UPDATED = "UPDATED"
@@ -246,6 +258,7 @@ __all__ = [
     "KnowledgeChangeStatus",
     "ModelRunPurpose",
     "ModelRunStatus",
+    "PublicationRunStatus",
     "QualityVerdict",
     "ReviewRequestStatus",
     "RiskLevel",

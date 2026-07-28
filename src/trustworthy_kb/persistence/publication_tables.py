@@ -15,6 +15,7 @@ from trustworthy_kb.domain.enums import (
     IndexGenerationStatus,
     IndexJobStatus,
     KnowledgeChangeStatus,
+    PublicationRunStatus,
 )
 from trustworthy_kb.domain.ids import (
     CuratedVersionId,
@@ -23,6 +24,7 @@ from trustworthy_kb.domain.ids import (
     KnowledgeChangeId,
     KnowledgeNoteId,
     LineageEdgeId,
+    PublicationRunId,
     SourceId,
     SourceVersionId,
     TypedId,
@@ -35,6 +37,7 @@ from trustworthy_kb.persistence.base import (
     entity_id_check,
     id_prefix_check,
     sha256_check,
+    utc_now,
 )
 from trustworthy_kb.persistence.types import AnyTypedIdType, TypedIdType, UTCDateTime
 
@@ -166,6 +169,10 @@ class CuratedVersionTable(RevisionMixin, TimestampMixin, Base):
         default=CuratedVersionStatus.DRAFT,
         server_default=CuratedVersionStatus.DRAFT.value,
     )
+    staging_path: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    claim_set_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    published_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     __table_args__ = (
         CheckConstraint(
@@ -175,6 +182,18 @@ class CuratedVersionTable(RevisionMixin, TimestampMixin, Base):
         CheckConstraint("version_number >= 1", name="curated_version_number_positive"),
         CheckConstraint(sha256_check("content_hash"), name="curated_version_content_hash"),
         CheckConstraint("length(vault_path) > 0", name="curated_version_path_not_empty"),
+        CheckConstraint(
+            "staging_path IS NULL OR length(staging_path) > 0",
+            name="curated_version_staging_path_not_empty",
+        ),
+        CheckConstraint(
+            "claim_set_hash IS NULL OR (" + sha256_check("claim_set_hash") + ")",
+            name="curated_version_claim_set_hash",
+        ),
+        CheckConstraint(
+            "operation_id IS NULL OR length(operation_id) > 0",
+            name="curated_version_operation_not_empty",
+        ),
         CheckConstraint("revision >= 1", name="curated_version_revision_positive"),
         UniqueConstraint("note_id", "version_number", name="uq_curated_versions_number"),
         UniqueConstraint("note_id", "content_hash", name="uq_curated_versions_content"),
@@ -239,6 +258,16 @@ class IndexGenerationTable(RevisionMixin, CreatedAtMixin, Base):
     generation_number: Mapped[int] = mapped_column(nullable=False, unique=True)
     embedding_model: Mapped[str] = mapped_column(String(255), nullable=False)
     chunker_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    collection_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="unconfigured", server_default="unconfigured"
+    )
+    embedding_dimension: Mapped[int] = mapped_column(nullable=False, default=1, server_default="1")
+    schema_version: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="legacy-v1", server_default="legacy-v1"
+    )
+    manifest_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="0" * 64, server_default="0" * 64
+    )
     status: Mapped[IndexGenerationStatus] = mapped_column(
         Enum(
             IndexGenerationStatus,
@@ -268,6 +297,19 @@ class IndexGenerationTable(RevisionMixin, CreatedAtMixin, Base):
             "length(chunker_version) > 0",
             name="index_generation_chunker_version_not_empty",
         ),
+        CheckConstraint(
+            "length(collection_name) > 0",
+            name="index_generation_collection_name_not_empty",
+        ),
+        CheckConstraint(
+            "embedding_dimension >= 1",
+            name="index_generation_embedding_dimension_positive",
+        ),
+        CheckConstraint(
+            "length(schema_version) > 0",
+            name="index_generation_schema_version_not_empty",
+        ),
+        CheckConstraint(sha256_check("manifest_hash"), name="index_generation_manifest_hash"),
         CheckConstraint("revision >= 1", name="index_generation_revision_positive"),
         Index(
             "uq_index_generations_one_active",
@@ -313,6 +355,10 @@ class IndexJobTable(RevisionMixin, TimestampMixin, Base):
         server_default=IndexJobStatus.PENDING.value,
     )
     attempt: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    indexed_chunk_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    operation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    last_verified_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     error_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     lease_owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
     lease_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
@@ -321,12 +367,82 @@ class IndexJobTable(RevisionMixin, TimestampMixin, Base):
         CheckConstraint(id_prefix_check("id", IndexJobId), name="index_job_id_prefix"),
         CheckConstraint(entity_id_check("object_type", "object_id"), name="index_job_id_type"),
         CheckConstraint("attempt >= 0", name="index_job_attempt_nonnegative"),
+        CheckConstraint(
+            "content_hash IS NULL OR (" + sha256_check("content_hash") + ")",
+            name="index_job_content_hash",
+        ),
+        CheckConstraint("indexed_chunk_count >= 0", name="index_job_chunk_count_nonnegative"),
+        CheckConstraint(
+            "operation_id IS NULL OR length(operation_id) > 0",
+            name="index_job_operation_not_empty",
+        ),
         CheckConstraint("revision >= 1", name="index_job_revision_positive"),
         UniqueConstraint(
             "object_type",
             "object_id",
             "generation_id",
             name="uq_index_jobs_object_generation",
+        ),
+    )
+
+
+class PublicationRunTable(RevisionMixin, TimestampMixin, Base):
+    __tablename__ = "publication_runs"
+
+    id: Mapped[PublicationRunId] = mapped_column(TypedIdType(PublicationRunId), primary_key=True)
+    knowledge_change_id: Mapped[KnowledgeChangeId] = mapped_column(
+        TypedIdType(KnowledgeChangeId),
+        ForeignKey("knowledge_changes.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    note_id: Mapped[KnowledgeNoteId] = mapped_column(
+        TypedIdType(KnowledgeNoteId),
+        ForeignKey("knowledge_notes.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    curated_version_id: Mapped[CuratedVersionId] = mapped_column(
+        TypedIdType(CuratedVersionId),
+        ForeignKey("curated_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    target_generation_id: Mapped[IndexGenerationId] = mapped_column(
+        TypedIdType(IndexGenerationId),
+        ForeignKey("index_generations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    operation_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    status: Mapped[PublicationRunStatus] = mapped_column(
+        Enum(
+            PublicationRunStatus,
+            values_callable=lambda enum: [item.value for item in enum],
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+            name="publication_run_status",
+        ),
+        nullable=False,
+        default=PublicationRunStatus.PLANNING,
+        server_default=PublicationRunStatus.PLANNING.value,
+    )
+    attempt: Mapped[int] = mapped_column(nullable=False, default=1, server_default="1")
+    error_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, default=utc_now)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(id_prefix_check("id", PublicationRunId), name="publication_run_id_prefix"),
+        CheckConstraint("length(operation_id) > 0", name="publication_run_operation_not_empty"),
+        CheckConstraint("attempt >= 1", name="publication_run_attempt_positive"),
+        CheckConstraint("revision >= 1", name="publication_run_revision_positive"),
+        CheckConstraint(
+            "completed_at IS NULL OR completed_at >= started_at",
+            name="publication_run_completed_after_start",
+        ),
+        UniqueConstraint(
+            "knowledge_change_id",
+            "target_generation_id",
+            name="uq_publication_runs_change_generation",
         ),
     )
 
@@ -338,4 +454,5 @@ __all__ = [
     "KnowledgeChangeTable",
     "KnowledgeNoteTable",
     "LineageEdgeTable",
+    "PublicationRunTable",
 ]

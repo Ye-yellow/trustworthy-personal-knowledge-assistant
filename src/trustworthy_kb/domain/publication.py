@@ -18,6 +18,7 @@ from trustworthy_kb.domain.enums import (
     IndexGenerationStatus,
     IndexJobStatus,
     KnowledgeChangeStatus,
+    PublicationRunStatus,
 )
 from trustworthy_kb.domain.ids import (
     CuratedVersionId,
@@ -26,6 +27,7 @@ from trustworthy_kb.domain.ids import (
     KnowledgeChangeId,
     KnowledgeNoteId,
     LineageEdgeId,
+    PublicationRunId,
     SourceId,
     SourceVersionId,
     TypedId,
@@ -66,6 +68,10 @@ class CuratedVersionRecord(DomainRecord):
     content_hash: Sha256Hex
     vault_path: NonEmptyText
     status: CuratedVersionStatus
+    staging_path: str | None = None
+    claim_set_hash: Sha256Hex | None = None
+    operation_id: str | None = None
+    published_at: AwareDatetime | None = None
     revision: Revision
     created_at: AwareDatetime
     updated_at: AwareDatetime
@@ -87,6 +93,10 @@ class IndexGenerationRecord(DomainRecord):
     generation_number: Revision
     embedding_model: NonEmptyText
     chunker_version: NonEmptyText
+    collection_name: NonEmptyText = "unconfigured"
+    embedding_dimension: Revision = 1
+    schema_version: NonEmptyText = "legacy-v1"
+    manifest_hash: Sha256Hex = "0" * 64
     status: IndexGenerationStatus
     revision: Revision
     created_at: AwareDatetime
@@ -100,10 +110,31 @@ class IndexJobRecord(DomainRecord):
     generation_id: IndexGenerationId
     status: IndexJobStatus
     attempt: NonNegativeInt
+    content_hash: Sha256Hex | None = None
+    indexed_chunk_count: NonNegativeInt = 0
+    operation_id: str | None = None
+    last_verified_at: AwareDatetime | None = None
     error_category: str | None = None
     lease_owner: str | None = None
     lease_expires_at: AwareDatetime | None = None
     revision: Revision
+    created_at: AwareDatetime
+    updated_at: AwareDatetime
+
+
+class PublicationRunRecord(DomainRecord):
+    id: PublicationRunId
+    knowledge_change_id: KnowledgeChangeId
+    note_id: KnowledgeNoteId
+    curated_version_id: CuratedVersionId
+    target_generation_id: IndexGenerationId
+    operation_id: NonEmptyText
+    status: PublicationRunStatus
+    attempt: Revision
+    error_category: str | None = None
+    revision: Revision
+    started_at: AwareDatetime
+    completed_at: AwareDatetime | None = None
     created_at: AwareDatetime
     updated_at: AwareDatetime
 
@@ -115,4 +146,5 @@ __all__ = [
     "KnowledgeChangeRecord",
     "KnowledgeNoteRecord",
     "LineageEdgeRecord",
+    "PublicationRunRecord",
 ]

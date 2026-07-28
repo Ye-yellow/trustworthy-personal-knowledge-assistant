@@ -16,6 +16,7 @@ from trustworthy_kb.domain.enums import (
     IngestionRunStatus,
     KnowledgeChangeStatus,
     ModelRunStatus,
+    PublicationRunStatus,
     ReviewRequestStatus,
     SourceVersionStatus,
 )
@@ -94,6 +95,7 @@ _TRANSITIONS: dict[type[StrEnum], dict[StrEnum, frozenset[StrEnum]]] = {
                 CuratedVersionStatus.SUPERSEDED,
             }
         ),
+        CuratedVersionStatus.STALE_PENDING_REVIEW: frozenset({CuratedVersionStatus.SUPERSEDED}),
     },
     IndexGenerationStatus: {
         IndexGenerationStatus.STAGING: frozenset(
@@ -247,6 +249,39 @@ _TRANSITIONS: dict[type[StrEnum], dict[StrEnum, frozenset[StrEnum]]] = {
                 ReviewRequestStatus.CANCELLED,
             }
         )
+    },
+    PublicationRunStatus: {
+        PublicationRunStatus.PLANNING: frozenset(
+            {PublicationRunStatus.CURATING, PublicationRunStatus.FAILED}
+        ),
+        PublicationRunStatus.CURATING: frozenset(
+            {PublicationRunStatus.VAULT_STAGED, PublicationRunStatus.FAILED}
+        ),
+        PublicationRunStatus.VAULT_STAGED: frozenset(
+            {PublicationRunStatus.INDEXING, PublicationRunStatus.FAILED}
+        ),
+        PublicationRunStatus.INDEXING: frozenset(
+            {PublicationRunStatus.INDEX_VERIFIED, PublicationRunStatus.FAILED}
+        ),
+        PublicationRunStatus.INDEX_VERIFIED: frozenset(
+            {PublicationRunStatus.VAULT_PUBLISHED, PublicationRunStatus.FAILED}
+        ),
+        PublicationRunStatus.VAULT_PUBLISHED: frozenset(
+            {PublicationRunStatus.ACTIVATING, PublicationRunStatus.FAILED}
+        ),
+        PublicationRunStatus.ACTIVATING: frozenset(
+            {PublicationRunStatus.COMPLETED, PublicationRunStatus.FAILED}
+        ),
+        PublicationRunStatus.FAILED: frozenset(
+            {
+                PublicationRunStatus.CURATING,
+                PublicationRunStatus.VAULT_STAGED,
+                PublicationRunStatus.INDEXING,
+                PublicationRunStatus.INDEX_VERIFIED,
+                PublicationRunStatus.VAULT_PUBLISHED,
+                PublicationRunStatus.ACTIVATING,
+            }
+        ),
     },
 }
 

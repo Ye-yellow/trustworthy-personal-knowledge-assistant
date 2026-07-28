@@ -28,6 +28,9 @@ from trustworthy_kb.domain import (
     KnowledgeNoteId,
     KnowledgeNoteRecord,
     LineageEdgeRecord,
+    PublicationRunId,
+    PublicationRunRecord,
+    PublicationRunStatus,
     TypedId,
     require_transition,
 )
@@ -39,6 +42,7 @@ from trustworthy_kb.persistence.publication_tables import (
     KnowledgeChangeTable,
     KnowledgeNoteTable,
     LineageEdgeTable,
+    PublicationRunTable,
 )
 from trustworthy_kb.persistence.repository_base import (
     concurrent,
@@ -132,6 +136,18 @@ class PublicationRepository:
         await flush_safely(self._session, entity="knowledge note", identifier=record.id)
         return to_record(KnowledgeNoteRecord, row)
 
+    async def get_note(self, note_id: KnowledgeNoteId) -> KnowledgeNoteRecord:
+        return to_record(KnowledgeNoteRecord, await self._note_row(note_id))
+
+    async def find_note_by_path(self, canonical_path: str) -> KnowledgeNoteRecord | None:
+        row = await self._session.scalar(
+            select(KnowledgeNoteTable).where(
+                KnowledgeNoteTable.canonical_path == canonical_path,
+                KnowledgeNoteTable.deleted_at.is_(None),
+            )
+        )
+        return None if row is None else to_record(KnowledgeNoteRecord, row)
+
     async def add_curated_version(
         self,
         record: CuratedVersionRecord,
@@ -166,6 +182,20 @@ class PublicationRepository:
             expected_revision,
         )
         return to_record(CuratedVersionRecord, updated)
+
+    async def get_curated_version(self, version_id: CuratedVersionId) -> CuratedVersionRecord:
+        return to_record(CuratedVersionRecord, await self._curated_row(version_id))
+
+    async def list_curated_versions(
+        self, note_id: KnowledgeNoteId
+    ) -> tuple[CuratedVersionRecord, ...]:
+        await self._note_row(note_id)
+        rows = await self._session.scalars(
+            select(CuratedVersionTable)
+            .where(CuratedVersionTable.note_id == note_id)
+            .order_by(CuratedVersionTable.version_number, CuratedVersionTable.id)
+        )
+        return tuple(to_record(CuratedVersionRecord, row) for row in rows)
 
     async def activate_curated_version(
         self,
@@ -267,6 +297,18 @@ class PublicationRepository:
         )
         return to_record(IndexGenerationRecord, updated)
 
+    async def get_index_generation(self, generation_id: IndexGenerationId) -> IndexGenerationRecord:
+        row = await self._required_row(IndexGenerationTable, generation_id, "index generation")
+        return to_record(IndexGenerationRecord, row)
+
+    async def get_active_index_generation(self) -> IndexGenerationRecord | None:
+        row = await self._session.scalar(
+            select(IndexGenerationTable).where(
+                IndexGenerationTable.status == IndexGenerationStatus.ACTIVE
+            )
+        )
+        return None if row is None else to_record(IndexGenerationRecord, row)
+
     async def add_index_job(self, record: IndexJobRecord) -> IndexJobRecord:
         if record.revision != 1 or record.status is not IndexJobStatus.PENDING:
             raise invariant("index job creation", record.id)
@@ -305,6 +347,344 @@ class PublicationRepository:
             identifier=job_id,
         )
         return to_record(IndexJobRecord, updated)
+
+    async def get_index_job(self, job_id: IndexJobId) -> IndexJobRecord:
+        row = await self._required_row(IndexJobTable, job_id, "index job")
+        return to_record(IndexJobRecord, row)
+
+    async def mark_index_job_indexed(
+        self,
+        job_id: IndexJobId,
+        *,
+        content_hash: str,
+        indexed_chunk_count: int,
+        expected_revision: int,
+    ) -> IndexJobRecord:
+        row = await self._required_row(IndexJobTable, job_id, "index job")
+        if row.revision != expected_revision:
+            raise concurrent("index job", job_id)
+        require_transition(row.status, IndexJobStatus.INDEXED)
+        updated = await self._cas(
+            update(IndexJobTable)
+            .where(IndexJobTable.id == job_id, IndexJobTable.revision == expected_revision)
+            .values(
+                status=IndexJobStatus.INDEXED,
+                content_hash=content_hash,
+                indexed_chunk_count=indexed_chunk_count,
+                last_verified_at=utc_now(),
+                error_category=None,
+                revision=expected_revision + 1,
+                updated_at=utc_now(),
+            )
+            .returning(IndexJobTable),
+            select(IndexJobTable.id).where(IndexJobTable.id == job_id),
+            entity="index job",
+            identifier=job_id,
+        )
+        return to_record(IndexJobRecord, updated)
+
+    async def add_publication_run(self, record: PublicationRunRecord) -> PublicationRunRecord:
+        if (
+            record.revision != 1
+            or record.attempt != 1
+            or record.status is not PublicationRunStatus.PLANNING
+            or record.completed_at is not None
+        ):
+            raise invariant("publication run creation", record.id)
+        change = await self._required_row(
+            KnowledgeChangeTable, record.knowledge_change_id, "knowledge change"
+        )
+        note = await self._note_row(record.note_id)
+        version = await self._curated_row(record.curated_version_id)
+        await self._required_row(
+            IndexGenerationTable, record.target_generation_id, "index generation"
+        )
+        if version.note_id != note.id or version.based_on_change_id != change.id:
+            raise invariant("publication run ownership", record.id)
+        row = PublicationRunTable(**record.model_dump(mode="python"))
+        self._session.add(row)
+        await flush_safely(self._session, entity="publication run", identifier=record.id)
+        return to_record(PublicationRunRecord, row)
+
+    async def get_publication_run(self, run_id: PublicationRunId) -> PublicationRunRecord:
+        row = await self._required_row(PublicationRunTable, run_id, "publication run")
+        return to_record(PublicationRunRecord, row)
+
+    async def find_publication_run(self, operation_id: str) -> PublicationRunRecord | None:
+        row = await self._session.scalar(
+            select(PublicationRunTable).where(PublicationRunTable.operation_id == operation_id)
+        )
+        return None if row is None else to_record(PublicationRunRecord, row)
+
+    async def transition_publication_run(
+        self,
+        run_id: PublicationRunId,
+        target_status: PublicationRunStatus,
+        *,
+        expected_revision: int,
+        error_category: str | None = None,
+    ) -> PublicationRunRecord:
+        row = await self._required_row(PublicationRunTable, run_id, "publication run")
+        if row.revision != expected_revision:
+            raise concurrent("publication run", run_id)
+        require_transition(row.status, target_status)
+        values: dict[str, object] = {
+            "status": target_status,
+            "error_category": error_category,
+            "revision": expected_revision + 1,
+            "updated_at": utc_now(),
+        }
+        if row.status is PublicationRunStatus.FAILED:
+            values["attempt"] = row.attempt + 1
+            values["error_category"] = None
+        if target_status is PublicationRunStatus.COMPLETED:
+            values["completed_at"] = utc_now()
+        updated = await self._cas(
+            update(PublicationRunTable)
+            .where(
+                PublicationRunTable.id == run_id,
+                PublicationRunTable.revision == expected_revision,
+            )
+            .values(**values)
+            .returning(PublicationRunTable),
+            select(PublicationRunTable.id).where(PublicationRunTable.id == run_id),
+            entity="publication run",
+            identifier=run_id,
+        )
+        return to_record(PublicationRunRecord, updated)
+
+    async def resolve_current_versions(
+        self, note_ids: Sequence[KnowledgeNoteId]
+    ) -> dict[KnowledgeNoteId, tuple[CuratedVersionId, IndexGenerationId]]:
+        if not note_ids:
+            return {}
+        rows = await self._session.execute(
+            select(
+                KnowledgeNoteTable.id,
+                KnowledgeNoteTable.current_curated_version_id,
+                KnowledgeNoteTable.active_index_generation_id,
+            ).where(
+                KnowledgeNoteTable.id.in_(tuple(dict.fromkeys(note_ids))),
+                KnowledgeNoteTable.deleted_at.is_(None),
+                KnowledgeNoteTable.current_curated_version_id.is_not(None),
+                KnowledgeNoteTable.active_index_generation_id.is_not(None),
+            )
+        )
+        return {
+            row.id: (row.current_curated_version_id, row.active_index_generation_id) for row in rows
+        }
+
+    async def activate_publication(
+        self,
+        *,
+        run_id: PublicationRunId,
+        job_id: IndexJobId,
+        expected_run_revision: int,
+        expected_note_revision: int,
+        expected_version_revision: int,
+        expected_job_revision: int,
+        expected_change_revision: int,
+        expected_generation_revision: int,
+    ) -> tuple[
+        PublicationRunRecord,
+        KnowledgeNoteRecord,
+        CuratedVersionRecord,
+        IndexJobRecord,
+        KnowledgeChangeRecord,
+        IndexGenerationRecord,
+    ]:
+        """Atomically switch every authoritative pointer after external verification."""
+
+        async with self._session.begin_nested():
+            run = await self._required_row(PublicationRunTable, run_id, "publication run")
+            note = await self._note_row(run.note_id)
+            version = await self._curated_row(run.curated_version_id)
+            job = await self._required_row(IndexJobTable, job_id, "index job")
+            change = await self._required_row(
+                KnowledgeChangeTable, run.knowledge_change_id, "knowledge change"
+            )
+            generation = await self._required_row(
+                IndexGenerationTable, run.target_generation_id, "index generation"
+            )
+            expected = (
+                (run, expected_run_revision, "publication run", run_id),
+                (note, expected_note_revision, "knowledge note", note.id),
+                (version, expected_version_revision, "curated version", version.id),
+                (job, expected_job_revision, "index job", job.id),
+                (change, expected_change_revision, "knowledge change", change.id),
+                (
+                    generation,
+                    expected_generation_revision,
+                    "index generation",
+                    generation.id,
+                ),
+            )
+            for row, revision, entity, identifier in expected:
+                if row.revision != revision:
+                    raise concurrent(entity, identifier)
+            if (
+                run.status is not PublicationRunStatus.ACTIVATING
+                or version.status is not CuratedVersionStatus.STAGING
+                or job.status is not IndexJobStatus.INDEXED
+                or change.status is not KnowledgeChangeStatus.PUBLISH_INTENT
+                or version.note_id != note.id
+                or version.based_on_change_id != change.id
+                or job.object_type is not EntityType.CURATED_VERSION
+                or job.object_id != version.id
+                or job.generation_id != generation.id
+            ):
+                raise invariant("publication activation", run_id)
+
+            if note.current_curated_version_id is not None:
+                old_version = await self._curated_row(note.current_curated_version_id)
+                if old_version.id != version.id:
+                    require_transition(old_version.status, CuratedVersionStatus.SUPERSEDED)
+                    await self._update_curated_version(
+                        old_version.id,
+                        CuratedVersionStatus.SUPERSEDED,
+                        old_version.revision,
+                    )
+
+            if generation.status is IndexGenerationStatus.STAGING:
+                old_generation = await self._session.scalar(
+                    select(IndexGenerationTable).where(
+                        IndexGenerationTable.status == IndexGenerationStatus.ACTIVE
+                    )
+                )
+                if old_generation is not None and old_generation.id != generation.id:
+                    require_transition(old_generation.status, IndexGenerationStatus.SUPERSEDED)
+                    await self._cas(
+                        update(IndexGenerationTable)
+                        .where(
+                            IndexGenerationTable.id == old_generation.id,
+                            IndexGenerationTable.revision == old_generation.revision,
+                        )
+                        .values(
+                            status=IndexGenerationStatus.SUPERSEDED,
+                            revision=old_generation.revision + 1,
+                        )
+                        .returning(IndexGenerationTable),
+                        select(IndexGenerationTable.id).where(
+                            IndexGenerationTable.id == old_generation.id
+                        ),
+                        entity="index generation",
+                        identifier=old_generation.id,
+                    )
+                active_generation_row = await self._cas(
+                    update(IndexGenerationTable)
+                    .where(
+                        IndexGenerationTable.id == generation.id,
+                        IndexGenerationTable.revision == expected_generation_revision,
+                    )
+                    .values(
+                        status=IndexGenerationStatus.ACTIVE,
+                        activated_at=utc_now(),
+                        revision=expected_generation_revision + 1,
+                    )
+                    .returning(IndexGenerationTable),
+                    select(IndexGenerationTable.id).where(IndexGenerationTable.id == generation.id),
+                    entity="index generation",
+                    identifier=generation.id,
+                )
+            elif generation.status is IndexGenerationStatus.ACTIVE:
+                active_generation_row = generation
+            else:
+                raise invariant("publication generation", generation.id)
+
+            now = utc_now()
+            active_version_row = await self._cas(
+                update(CuratedVersionTable)
+                .where(
+                    CuratedVersionTable.id == version.id,
+                    CuratedVersionTable.revision == expected_version_revision,
+                )
+                .values(
+                    status=CuratedVersionStatus.ACTIVE,
+                    published_at=now,
+                    revision=expected_version_revision + 1,
+                    updated_at=now,
+                )
+                .returning(CuratedVersionTable),
+                select(CuratedVersionTable.id).where(CuratedVersionTable.id == version.id),
+                entity="curated version",
+                identifier=version.id,
+            )
+            active_note_row = await self._cas(
+                update(KnowledgeNoteTable)
+                .where(
+                    KnowledgeNoteTable.id == note.id,
+                    KnowledgeNoteTable.revision == expected_note_revision,
+                    KnowledgeNoteTable.deleted_at.is_(None),
+                )
+                .values(
+                    current_curated_version_id=version.id,
+                    active_index_generation_id=generation.id,
+                    revision=expected_note_revision + 1,
+                    updated_at=now,
+                )
+                .returning(KnowledgeNoteTable),
+                select(KnowledgeNoteTable.id).where(KnowledgeNoteTable.id == note.id),
+                entity="knowledge note",
+                identifier=note.id,
+            )
+            active_job_row = await self._cas(
+                update(IndexJobTable)
+                .where(
+                    IndexJobTable.id == job.id,
+                    IndexJobTable.revision == expected_job_revision,
+                )
+                .values(
+                    status=IndexJobStatus.ACTIVE_INDEXED,
+                    revision=expected_job_revision + 1,
+                    updated_at=now,
+                )
+                .returning(IndexJobTable),
+                select(IndexJobTable.id).where(IndexJobTable.id == job.id),
+                entity="index job",
+                identifier=job.id,
+            )
+            active_change_row = await self._cas(
+                update(KnowledgeChangeTable)
+                .where(
+                    KnowledgeChangeTable.id == change.id,
+                    KnowledgeChangeTable.revision == expected_change_revision,
+                )
+                .values(
+                    status=KnowledgeChangeStatus.ACTIVE,
+                    revision=expected_change_revision + 1,
+                    updated_at=now,
+                )
+                .returning(KnowledgeChangeTable),
+                select(KnowledgeChangeTable.id).where(KnowledgeChangeTable.id == change.id),
+                entity="knowledge change",
+                identifier=change.id,
+            )
+            completed_run_row = await self._cas(
+                update(PublicationRunTable)
+                .where(
+                    PublicationRunTable.id == run.id,
+                    PublicationRunTable.revision == expected_run_revision,
+                )
+                .values(
+                    status=PublicationRunStatus.COMPLETED,
+                    completed_at=now,
+                    error_category=None,
+                    revision=expected_run_revision + 1,
+                    updated_at=now,
+                )
+                .returning(PublicationRunTable),
+                select(PublicationRunTable.id).where(PublicationRunTable.id == run.id),
+                entity="publication run",
+                identifier=run.id,
+            )
+        return (
+            to_record(PublicationRunRecord, completed_run_row),
+            to_record(KnowledgeNoteRecord, active_note_row),
+            to_record(CuratedVersionRecord, active_version_row),
+            to_record(IndexJobRecord, active_job_row),
+            to_record(KnowledgeChangeRecord, active_change_row),
+            to_record(IndexGenerationRecord, active_generation_row),
+        )
 
     async def _note_row(self, note_id: KnowledgeNoteId) -> KnowledgeNoteTable:
         row = await self._session.scalar(
