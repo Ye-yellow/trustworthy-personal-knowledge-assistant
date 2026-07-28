@@ -148,6 +148,23 @@ class PublicationRepository:
         )
         return None if row is None else to_record(KnowledgeNoteRecord, row)
 
+    async def list_active_notes(
+        self, generation_id: IndexGenerationId | None = None
+    ) -> tuple[KnowledgeNoteRecord, ...]:
+        statement = select(KnowledgeNoteTable).where(
+            KnowledgeNoteTable.deleted_at.is_(None),
+            KnowledgeNoteTable.current_curated_version_id.is_not(None),
+            KnowledgeNoteTable.active_index_generation_id.is_not(None),
+        )
+        if generation_id is not None:
+            statement = statement.where(
+                KnowledgeNoteTable.active_index_generation_id == generation_id
+            )
+        rows = await self._session.scalars(
+            statement.order_by(KnowledgeNoteTable.canonical_path, KnowledgeNoteTable.id)
+        )
+        return tuple(to_record(KnowledgeNoteRecord, row) for row in rows)
+
     async def add_curated_version(
         self,
         record: CuratedVersionRecord,
@@ -309,6 +326,15 @@ class PublicationRepository:
         )
         return None if row is None else to_record(IndexGenerationRecord, row)
 
+    async def list_index_generations(self) -> tuple[IndexGenerationRecord, ...]:
+        rows = await self._session.scalars(
+            select(IndexGenerationTable).order_by(
+                IndexGenerationTable.generation_number,
+                IndexGenerationTable.id,
+            )
+        )
+        return tuple(to_record(IndexGenerationRecord, row) for row in rows)
+
     async def add_index_job(self, record: IndexJobRecord) -> IndexJobRecord:
         if record.revision != 1 or record.status is not IndexJobStatus.PENDING:
             raise invariant("index job creation", record.id)
@@ -351,6 +377,12 @@ class PublicationRepository:
     async def get_index_job(self, job_id: IndexJobId) -> IndexJobRecord:
         row = await self._required_row(IndexJobTable, job_id, "index job")
         return to_record(IndexJobRecord, row)
+
+    async def find_index_job(self, operation_id: str) -> IndexJobRecord | None:
+        row = await self._session.scalar(
+            select(IndexJobTable).where(IndexJobTable.operation_id == operation_id)
+        )
+        return None if row is None else to_record(IndexJobRecord, row)
 
     async def mark_index_job_indexed(
         self,

@@ -62,9 +62,10 @@ Milvus 官方说明 Windows 可通过 WSL2/Docker Desktop 运行 Standalone，�
 - `ports.py`：Embedding、向量索引、Reranker、Vault 的协议。
 - `indexing.py`：Collection Schema、代际建立、幂等 upsert、强一致性验证、失效。
 - `retrieval.py`：查询嵌入、Dense/BM25/RRF、质量硬过滤、当前版本对账和精排。
-- `reconcile.py`：SQLite/Vault/Milvus 三方差异检测与安全修复动作。
+- `reconciliation.py`：SQLite/Vault/Milvus 三方差异检测与安全修复动作。
 - `runner.py`：两阶段发布 Saga 和可重入恢复。
-- `cli.py`：`publish`、`retrieve`、`reconcile`、`rebuild` 命令。
+- `snapshot_store.py`：在 Vault 外冻结整理稿和发布时 Claim 集，供重启恢复与对账使用。
+- `cli.py`：`generation create`、`publish`、`retrieve`、`reconcile` 命令。
 
 新增 `publication.adapters`：
 
@@ -220,27 +221,29 @@ FAILED -> CURATING | VAULT_STAGED | INDEXING | INDEX_VERIFIED | VAULT_PUBLISHED
 | SQLite 控制面不可用 | 检索拒绝返回结果 |
 | Milvus 查询失败 | P0 正确拒答；不把 SQLite FTS 当成等价事实检索 |
 
-所有重试有上限，失败类别固定枚举化；日志和 CLI 不输出正文、向量、API Key 或绝对 Vault 路径。
+所有重试有上限，失败类别固定枚举化；运行日志及发布/对账命令不输出正文、向量、API Key
+或绝对 Vault 路径。显式 `retrieve` 命令只在本机返回已经发布的整理稿 Chunk。
 
 ## 12. 配置与运行
 
 新增环境变量：
 
 ~~~text
-TKB_PUBLICATION_VAULT_PATH=
-TKB_PUBLICATION_STAGING_ROOT=_AI/Staging
-TKB_PUBLICATION_SNAPSHOT_ROOT=.data/publication-snapshots
-TKB_PUBLICATION_PROMPT_VERSION=curation-v1
-TKB_PUBLICATION_CHUNKER_VERSION=markdown-v1
-TKB_MILVUS_URI=http://localhost:19530
-TKB_MILVUS_TOKEN=
-TKB_MILVUS_COLLECTION_PREFIX=trustworthy_kb_chunks_g
-TKB_MILVUS_CONSISTENCY=Bounded
-TKB_EMBEDDING_PROVIDER=bge
-TKB_EMBEDDING_MODEL=BAAI/bge-m3
-TKB_EMBEDDING_DIMENSION=1024
-TKB_RERANKER_PROVIDER=bge
-TKB_RERANKER_MODEL=BAAI/bge-reranker-v2-m3
+TRUSTKB_PUBLICATION_VAULT_PATH=
+TRUSTKB_PUBLICATION_STAGING_ROOT=_AI/Staging
+TRUSTKB_PUBLICATION_SNAPSHOT_ROOT=./storage/publication-snapshots
+TRUSTKB_PUBLICATION_PROMPT_VERSION=curation-v1
+TRUSTKB_PUBLICATION_CHUNKER_VERSION=markdown-v1
+TRUSTKB_RETRIEVAL_MILVUS_URI=http://127.0.0.1:19530
+TRUSTKB_RETRIEVAL_MILVUS_TOKEN=
+TRUSTKB_RETRIEVAL_COLLECTION_PREFIX=trustworthy_kb_chunks_g
+TRUSTKB_RETRIEVAL_CONSISTENCY=Bounded
+TRUSTKB_RETRIEVAL_EMBEDDING_PROVIDER=bge
+TRUSTKB_RETRIEVAL_EMBEDDING_MODEL=BAAI/bge-m3
+TRUSTKB_RETRIEVAL_EMBEDDING_DIMENSION=1024
+TRUSTKB_RETRIEVAL_RERANKER_PROVIDER=bge
+TRUSTKB_RETRIEVAL_RERANKER_MODEL=BAAI/bge-reranker-v2-m3
+TRUSTKB_RETRIEVAL_MODEL_CACHE_ROOT=./storage/model-cache
 ~~~
 
 生产适配器用延迟导入；未安装 `.[retrieval]` 时，非检索模块仍可导入。Compose 文件固定镜像 digest 或版本，数据放命名 volume，不提交模型缓存或索引数据。

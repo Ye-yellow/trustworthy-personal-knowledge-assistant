@@ -17,7 +17,10 @@ from trustworthy_kb.publication.curation import (
     ModelCurationPlanner,
 )
 from trustworthy_kb.publication.indexing import GenerationIndexer
+from trustworthy_kb.publication.reconciliation import PublicationReconciler
 from trustworthy_kb.publication.retrieval import HybridRetriever
+from trustworthy_kb.publication.runner import PublicationReport, PublicationRunner
+from trustworthy_kb.publication.snapshot_store import PublicationSnapshotStore
 from trustworthy_kb.publication.vault import AtomicVaultPublisher
 
 __all__ = [
@@ -33,6 +36,10 @@ __all__ = [
     "KnowledgeChunk",
     "MarkdownChunker",
     "ModelCurationPlanner",
+    "PublicationReconciler",
+    "PublicationReport",
+    "PublicationRunner",
+    "PublicationSnapshotStore",
     "RetrievalHit",
     "RetrievalQuery",
     "RetrievalResult",

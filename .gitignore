@@ -61,6 +61,7 @@ secrets.*
 /vault/
 /Vault/
 /obsidian-vault/
+/local-vault/
 /.obsidian/
 /_Sources/
 /_AI/

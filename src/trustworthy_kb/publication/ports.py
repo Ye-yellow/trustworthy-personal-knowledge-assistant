@@ -10,6 +10,8 @@ from pydantic import BaseModel
 
 from trustworthy_kb.domain import CuratedVersionId, IndexGenerationId, KnowledgeNoteId
 from trustworthy_kb.publication.contracts import (
+    CurationClaim,
+    CurationPlan,
     IndexedChunk,
     IndexProbe,
     RerankItem,
@@ -18,6 +20,10 @@ from trustworthy_kb.publication.contracts import (
 )
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
+
+
+class CurationPlanner(Protocol):
+    async def plan(self, claims: Sequence[CurationClaim]) -> CurationPlan: ...
 
 
 class StructuredModelGateway(Protocol):
@@ -82,10 +88,16 @@ class CurrentVersionResolver(Protocol):
     ) -> Mapping[KnowledgeNoteId, tuple[CuratedVersionId, IndexGenerationId]]: ...
 
 
+class VaultVerificationGateway(Protocol):
+    async def verify(self, relative_path: str, *, expected_hash: str) -> Mapping[str, object]: ...
+
+
 __all__ = [
+    "CurationPlanner",
     "CurrentVersionResolver",
     "EmbeddingGateway",
     "RerankerGateway",
     "StructuredModelGateway",
+    "VaultVerificationGateway",
     "VectorIndexGateway",
 ]

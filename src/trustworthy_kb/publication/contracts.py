@@ -197,6 +197,39 @@ class ReconciliationSeverity(StrEnum):
     BLOCKED = "blocked"
 
 
+class ExpectedPublication(StrictContract):
+    artifact: CurationArtifact
+    final_relative_path: NonEmptyText
+    generation_number: Annotated[int, Field(ge=1)]
+    chunks: tuple[KnowledgeChunk, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _one_complete_publication(self) -> ExpectedPublication:
+        if any(
+            chunk.note_id != self.artifact.note_id
+            or chunk.curated_version_id != self.artifact.curated_version_id
+            or chunk.content_hash != self.artifact.content_hash
+            or chunk.generation_number != self.generation_number
+            for chunk in self.chunks
+        ):
+            raise ValueError("reconciliation input spans different publication identities")
+        if len({chunk.chunk_id for chunk in self.chunks}) != len(self.chunks):
+            raise ValueError("reconciliation input contains duplicate Chunk IDs")
+        return self
+
+
+class PublicationSnapshot(StrictContract):
+    artifact: CurationArtifact
+    claims: tuple[CurationClaim, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _frozen_claim_set(self) -> PublicationSnapshot:
+        claim_ids = tuple(claim.id for claim in self.claims)
+        if len(set(claim_ids)) != len(claim_ids) or set(claim_ids) != set(self.artifact.claim_ids):
+            raise ValueError("publication snapshot Claim set does not match its artifact")
+        return self
+
+
 class ReconciliationFinding(StrictContract):
     code: NonEmptyText
     severity: ReconciliationSeverity
@@ -226,9 +259,11 @@ __all__ = [
     "CurationClaim",
     "CurationGroup",
     "CurationPlan",
+    "ExpectedPublication",
     "IndexProbe",
     "IndexedChunk",
     "KnowledgeChunk",
+    "PublicationSnapshot",
     "ReconciliationFinding",
     "ReconciliationReport",
     "ReconciliationSeverity",

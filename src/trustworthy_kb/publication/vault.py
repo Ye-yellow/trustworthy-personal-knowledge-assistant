@@ -27,8 +27,11 @@ class AtomicVaultPublisher:
         versions_root: str = "_AI/Versions",
         max_bytes: int = 5 * 1024 * 1024,
     ) -> None:
-        root = vault_root.expanduser().resolve(strict=True)
-        if not root.is_dir() or root.is_symlink():
+        root_input = vault_root.expanduser()
+        if root_input.is_symlink():
+            raise VaultPublicationError("Vault root must be a real directory")
+        root = root_input.resolve(strict=True)
+        if not root.is_dir():
             raise VaultPublicationError("Vault root must be a real directory")
         if max_bytes < 1024:
             raise ValueError("Vault publication byte limit is too small")
