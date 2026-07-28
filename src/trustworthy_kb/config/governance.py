@@ -32,6 +32,9 @@ class GovernanceSettings(BaseSettings):
     max_concurrency: Annotated[int, Field(ge=1, le=32)] = 4
     max_retries: Annotated[int, Field(ge=0, le=10)] = 2
     max_extraction_characters: Annotated[int, Field(ge=1000, le=5_000_000)] = 200_000
+    t1_domains: tuple[str, ...] = ()
+    t2_domains: tuple[str, ...] = ()
+    source_snapshot_root: SecretStr = SecretStr("./storage/source-snapshots")
     evidence_snapshot_root: SecretStr = SecretStr("./storage/evidence-snapshots")
     checkpoint_path: SecretStr = SecretStr("./storage/checkpoints/governance.sqlite")
 
@@ -49,14 +52,32 @@ class GovernanceSettings(BaseSettings):
             raise ValueError("version must not be empty")
         return normalized
 
-    @field_validator("evidence_snapshot_root", "checkpoint_path", mode="before")
+    @field_validator(
+        "source_snapshot_root", "evidence_snapshot_root", "checkpoint_path", mode="before"
+    )
     @classmethod
     def _normalize_paths(cls, value: object) -> SecretStr:
         return _non_empty_secret(value)
 
+    @field_validator("t1_domains", "t2_domains", mode="before")
+    @classmethod
+    def _normalize_domains(cls, value: object) -> tuple[str, ...]:
+        if not isinstance(value, (list, tuple, set, frozenset)):
+            raise ValueError("trusted domains must be a JSON array")
+        normalized = tuple(
+            sorted({str(item).strip().lower().rstrip(".") for item in value if str(item).strip()})
+        )
+        if any("/" in domain or ":" in domain or " " in domain for domain in normalized):
+            raise ValueError("trusted domains must contain host names only")
+        return normalized
+
     @property
     def evidence_snapshot_root_value(self) -> Path:
         return Path(self.evidence_snapshot_root.get_secret_value())
+
+    @property
+    def source_snapshot_root_value(self) -> Path:
+        return Path(self.source_snapshot_root.get_secret_value())
 
     @property
     def checkpoint_path_value(self) -> Path:

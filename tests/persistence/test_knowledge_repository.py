@@ -184,6 +184,14 @@ async def test_knowledge_repository_records_evidence_quality_and_claim_lifecycle
         assert await repository.add_claim(claim) == claim
         assert await repository.attach_claim_origin(origin) == origin
         assert await repository.add_evidence_family(family) == family
+        assert await repository.get_claim(claim.id) == claim
+        assert await repository.find_active_claim_by_fingerprint(claim.claim_fingerprint) == claim
+        assert await repository.list_claims_for_source_version(version_id) == (claim,)
+        assert (
+            await repository.find_evidence_family_by_fingerprint(family.origin_fingerprint)
+            == family
+        )
+        assert await repository.get_evidence_family(family.id) == family
         assert await repository.add_evidence(evidence) == evidence
         assert (
             await repository.record_quality_check(quality_check, [quality_evidence])

@@ -208,7 +208,9 @@ class SecureWebFetcher:
             download.headers.get("content-encoding", "identity"),
             self._settings.max_decoded_bytes,
         )
-        normalized_text, signals = _extract_text(decoded, media_type, download.headers)
+        normalized_text, signals = _extract_text(
+            decoded, media_type, download.headers, final_url=final_url
+        )
         raw_hash, raw_ref = self._store.put_bytes("raw", download.raw, suffix="bin")
         blocks = _text_blocks(normalized_text)
         _extracted_hash, extracted_ref = self._store.put_json(
@@ -368,7 +370,11 @@ class _VisibleTextParser(HTMLParser):
 
 
 def _extract_text(
-    decoded: bytes, media_type: str, headers: httpx.Headers
+    decoded: bytes,
+    media_type: str,
+    headers: httpx.Headers,
+    *,
+    final_url: str,
 ) -> tuple[str, tuple[str, ...]]:
     if media_type in {"text/plain", "application/json"}:
         text = _decode_text(
@@ -385,7 +391,14 @@ def _extract_text(
         parser.feed(
             _decode_text(decoded, httpx.Headers({"content-type": headers.get("content-type", "")}))
         )
-        signals = ("canonical_link_present",) if parser.canonical_url else ()
+        signals: tuple[str, ...] = ()
+        if parser.canonical_url:
+            try:
+                canonical = normalize_public_https_url(urljoin(final_url, parser.canonical_url))
+                if urlsplit(canonical).hostname != urlsplit(final_url).hostname:
+                    signals = ("canonical_origin_mismatch",)
+            except UnsafeFetchTargetError:
+                signals = ("canonical_link_invalid",)
         return _normalize_text("".join(parser.parts)), signals
     return "", ("unsupported_extraction",)
 

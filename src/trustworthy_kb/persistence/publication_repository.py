@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import cast
 
 from sqlalchemy import select, update
@@ -74,6 +75,20 @@ class PublicationRepository:
         self._session.add(row)
         await flush_safely(self._session, entity="knowledge change", identifier=record.id)
         return to_record(KnowledgeChangeRecord, row)
+
+    async def get_knowledge_change(self, change_id: KnowledgeChangeId) -> KnowledgeChangeRecord:
+        row = await self._required_row(KnowledgeChangeTable, change_id, "knowledge change")
+        return to_record(KnowledgeChangeRecord, row)
+
+    async def list_knowledge_changes(
+        self, status: KnowledgeChangeStatus
+    ) -> Sequence[KnowledgeChangeRecord]:
+        rows = await self._session.scalars(
+            select(KnowledgeChangeTable)
+            .where(KnowledgeChangeTable.status == status)
+            .order_by(KnowledgeChangeTable.created_at, KnowledgeChangeTable.id)
+        )
+        return tuple(to_record(KnowledgeChangeRecord, row) for row in rows)
 
     async def transition_knowledge_change(
         self,

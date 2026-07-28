@@ -144,6 +144,8 @@ async def test_publication_repository_controls_change_curation_lineage_and_index
             updated_at=timestamp,
         )
         assert await repository.add_knowledge_change(change) == change
+        assert await repository.get_knowledge_change(change.id) == change
+        assert await repository.list_knowledge_changes(KnowledgeChangeStatus.RECEIVED) == (change,)
         validating_change = await repository.transition_knowledge_change(
             change.id,
             KnowledgeChangeStatus.VALIDATING,

@@ -10,10 +10,12 @@ from trustworthy_kb.config import FetchSettings, GovernanceSettings, SearchSetti
 
 def test_governance_settings_redact_paths_and_expose_boundary_values(tmp_path: Path) -> None:
     settings = GovernanceSettings(
+        source_snapshot_root=str(tmp_path / "source"),
         evidence_snapshot_root=str(tmp_path / "evidence"),
         checkpoint_path=str(tmp_path / "checkpoints" / "governance.sqlite"),
     )
 
+    assert settings.source_snapshot_root_value == tmp_path / "source"
     assert settings.evidence_snapshot_root_value == tmp_path / "evidence"
     assert settings.checkpoint_path_value.name == "governance.sqlite"
     assert str(tmp_path) not in repr(settings)
@@ -27,6 +29,17 @@ def test_search_and_fetch_settings_normalize_provider_and_media_types() -> None:
     assert search.provider == "sub2api"
     assert search.model is None
     assert fetch.allowed_media_types == ("application/pdf", "text/html")
+
+
+def test_governance_settings_normalize_and_validate_trusted_domains() -> None:
+    settings = GovernanceSettings(
+        t1_domains=[" Docs.Example.COM. ", "docs.example.com"],
+        t2_domains=["trusted.example"],
+    )
+
+    assert settings.t1_domains == ("docs.example.com",)
+    with pytest.raises(ValidationError):
+        GovernanceSettings(t1_domains=["https://example.com/path"])
 
 
 def test_governance_settings_reject_unsafe_limits() -> None:

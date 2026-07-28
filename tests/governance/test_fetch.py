@@ -114,11 +114,30 @@ async def test_fetcher_checks_robots_peer_extracts_and_snapshots_html(tmp_path: 
     assert document.complete
     assert "secret" not in " ".join(block.text for block in document.blocks)
     assert "Verified public text." in " ".join(block.text for block in document.blocks)
-    assert document.safety_signals == ("canonical_link_present",)
+    assert document.safety_signals == ()
     store = EvidenceSnapshotStore(tmp_path / "evidence")
     assert store.load_bytes(document.raw_snapshot_ref, document.raw_content_hash).startswith(
         b"<html>"
     )
+
+
+@pytest.mark.asyncio
+async def test_fetcher_flags_cross_origin_canonical_identity(tmp_path: Path) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return response(404)
+        return response(
+            200,
+            content=(
+                b"<html><head><link rel='canonical' href='https://other.example/page'>"
+                b"</head><body>Evidence text.</body></html>"
+            ),
+            headers={"Content-Type": "text/html"},
+        )
+
+    document = await fetcher(tmp_path, handler).fetch("https://example.com/page")
+
+    assert document.safety_signals == ("canonical_origin_mismatch",)
 
 
 @pytest.mark.asyncio

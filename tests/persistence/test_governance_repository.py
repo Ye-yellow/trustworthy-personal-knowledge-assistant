@@ -203,8 +203,27 @@ async def test_governance_repository_persists_run_item_and_cas_transitions(
             expected_revision=pending.revision,
         )
 
+        quality = QualityCheckRecord(
+            id=QualityCheckId.generate(),
+            claim_id=values["claim_id"],
+            policy_version="l3-v1",
+            verdict=QualityVerdict.INSUFFICIENT,
+            dimensions_json={},
+            reason_code="NO_EVIDENCE",
+            reason_summary="No evidence was available.",
+            evidence_snapshot_hash="e" * 64,
+            created_at=values["timestamp"],
+        )
+        await KnowledgeRepository(session).record_quality_check(quality, ())
+        pointed = await repository.set_item_quality_check(
+            item.id,
+            quality.id,
+            expected_revision=stored.revision,
+        )
+
         assert stored.evidence_pack_hash == "d" * 64
-        assert await repository.list_items(run.id) == (stored,)
+        assert pointed.current_quality_check_id == quality.id
+        assert await repository.list_items(run.id) == (pointed,)
         assert counted.total_items == 1
         with pytest.raises(ConcurrentModificationError):
             await repository.transition_run(
@@ -248,6 +267,7 @@ async def test_governance_repository_creates_one_live_review_and_records_decisio
     )
     try:
         assert await governance.add_review_request(request) == request
+        assert await governance.get_review_request(request.id) == request
         assert await governance.list_pending_reviews() == (request,)
         await session.commit()
         duplicate = request.model_copy(update={"id": ReviewRequestId.generate()})

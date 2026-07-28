@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import timedelta
 
 from sqlalchemy import select, update
@@ -59,6 +60,15 @@ class AuditRepository:
         self._session.add(row)
         await flush_safely(self._session, entity="model run", identifier=record.id)
         return to_record(ModelRunRecord, row)
+
+    async def get_model_run(self, model_run_id: ModelRunId) -> ModelRunRecord:
+        return to_record(ModelRunRecord, await self._required_model_run(model_run_id))
+
+    async def list_model_runs(self) -> Sequence[ModelRunRecord]:
+        rows = await self._session.scalars(
+            select(ModelRunTable).order_by(ModelRunTable.started_at, ModelRunTable.id)
+        )
+        return tuple(to_record(ModelRunRecord, row) for row in rows)
 
     async def finish_model_run(
         self,

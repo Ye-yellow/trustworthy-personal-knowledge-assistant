@@ -36,7 +36,7 @@ from trustworthy_kb.governance.fingerprints import (
     claim_family_key,
     claim_fingerprint,
 )
-from trustworthy_kb.governance.quality import PolicyDecision, QualityPolicyEngine
+from trustworthy_kb.governance.quality import PolicyDecision, QualityPolicyEngine, classify_risk
 from trustworthy_kb.governance.search import EvidenceSearchGateway, build_public_search_prompt
 from trustworthy_kb.governance.snapshot_store import EvidenceSnapshotStore
 from trustworthy_kb.governance.verifier import EvidenceVerifier, VerifierCandidate
@@ -76,6 +76,7 @@ __all__ = [
     "canonical_json_hash",
     "claim_family_key",
     "claim_fingerprint",
+    "classify_risk",
     "normalize_public_https_url",
     "store_search_manifest",
 ]

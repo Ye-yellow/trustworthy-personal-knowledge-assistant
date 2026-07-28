@@ -56,7 +56,7 @@ class QualityPolicyEngine:
         search_available: bool,
         safety_signals: tuple[str, ...] = (),
     ) -> PolicyDecision:
-        risk = _risk_level(claim)
+        risk = classify_risk(claim)
         dimensions = _dimensions(risk, pack, verification, safety_signals)
         if safety_signals:
             return _decision(
@@ -218,7 +218,9 @@ def _dimensions(
     )
 
 
-def _risk_level(claim: ClaimDraft) -> RiskLevel:
+def classify_risk(claim: ClaimDraft) -> RiskLevel:
+    """Classify claim risk without consulting a model."""
+
     domain = (claim.scope.domain or "").strip().lower()
     if domain in _HIGH_RISK_DOMAINS:
         return RiskLevel.HIGH
@@ -279,4 +281,4 @@ def _decision(
     )
 
 
-__all__ = ["PolicyDecision", "QualityPolicyEngine"]
+__all__ = ["PolicyDecision", "QualityPolicyEngine", "classify_risk"]

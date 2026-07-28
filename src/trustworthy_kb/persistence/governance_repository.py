@@ -16,6 +16,7 @@ from trustworthy_kb.domain import (
     GovernanceRunRecord,
     GovernanceRunStatus,
     KnowledgeChangeId,
+    QualityCheckId,
     ReviewRequestId,
     ReviewRequestRecord,
     ReviewRequestStatus,
@@ -173,6 +174,9 @@ class GovernanceRepository:
         ).all()
         return tuple(to_record(GovernanceItemRecord, row) for row in rows)
 
+    async def get_item(self, item_id: GovernanceItemId) -> GovernanceItemRecord:
+        return to_record(GovernanceItemRecord, await self._item_row(item_id))
+
     async def transition_item(
         self,
         item_id: GovernanceItemId,
@@ -232,6 +236,37 @@ class GovernanceRepository:
             raise concurrent("governance item", item_id)
         return to_record(GovernanceItemRecord, updated)
 
+    async def set_item_quality_check(
+        self,
+        item_id: GovernanceItemId,
+        quality_check_id: QualityCheckId,
+        *,
+        expected_revision: int,
+    ) -> GovernanceItemRecord:
+        row = await self._item_row(item_id)
+        if row.revision != expected_revision:
+            raise concurrent("governance item", item_id)
+        quality = await self._session.get(QualityCheckTable, quality_check_id)
+        if quality is None or quality.claim_id != row.claim_id:
+            raise invariant("governance item quality check", item_id)
+        result = await self._session.execute(
+            update(GovernanceItemTable)
+            .where(
+                GovernanceItemTable.id == item_id,
+                GovernanceItemTable.revision == expected_revision,
+            )
+            .values(
+                current_quality_check_id=quality_check_id,
+                revision=expected_revision + 1,
+                updated_at=utc_now(),
+            )
+            .returning(GovernanceItemTable)
+        )
+        updated = result.scalar_one_or_none()
+        if updated is None:
+            raise concurrent("governance item", item_id)
+        return to_record(GovernanceItemRecord, updated)
+
     async def add_review_request(self, record: ReviewRequestRecord) -> ReviewRequestRecord:
         if record.revision != 1 or record.status is not ReviewRequestStatus.PENDING:
             raise invariant("review request creation", record.id)
@@ -253,6 +288,9 @@ class GovernanceRepository:
             )
         ).all()
         return tuple(to_record(ReviewRequestRecord, row) for row in rows)
+
+    async def get_review_request(self, request_id: ReviewRequestId) -> ReviewRequestRecord:
+        return to_record(ReviewRequestRecord, await self._review_row(request_id))
 
     async def decide_review(
         self,
