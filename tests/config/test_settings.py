@@ -41,7 +41,26 @@ def test_llm_settings_reject_empty_api_key(api_key: str) -> None:
         LLMSettings(api_key=api_key)
 
 
+def test_llm_settings_validation_error_redacts_api_key() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        LLMSettings(api_key="validation-secret", base_url="not-a-url")
+
+    assert "validation-secret" not in str(exc_info.value)
+
+
 def test_non_sub2api_provider_does_not_inherit_local_base_url() -> None:
     settings = LLMSettings(provider="anthropic", model="claude-test", api_key="secret")
 
     assert settings.base_url is None
+
+
+def test_remote_provider_requires_api_key() -> None:
+    with pytest.raises(ValidationError, match="API key is required"):
+        LLMSettings(provider="openai", model="gpt-test")
+
+
+def test_ollama_provider_allows_missing_api_key() -> None:
+    settings = LLMSettings(provider=" OLLAMA ", model="llama-test")
+
+    assert settings.provider == "ollama"
+    assert settings.api_key is None

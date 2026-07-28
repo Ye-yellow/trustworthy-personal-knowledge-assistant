@@ -71,12 +71,15 @@ tests/
 - `TRUSTKB_LLM_ANSWER_MODEL`
 
 四个用途模型覆盖项均可省略；省略时使用 `TRUSTKB_LLM_MODEL=gpt-5.5`。
+远程 Provider 与 sub2api 必须提供 API key；明确允许无密钥运行的本地 Provider
+（当前为 Ollama）可以省略。Anthropic 与 Ollama 通过项目可选依赖安装，业务代码不变。
 
 ### 3.2 `factory.py`
 
 负责把项目配置映射为 LangChain 模型。sub2api 使用 `init_chat_model` 的 OpenAI Provider、自定义 Base URL、显式 API key、超时和有限重试。当前明确使用 Chat Completions，不自动切换 Responses API。
 
-工厂只认识配置和 LangChain，不包含 Claim、证据或问答业务逻辑。
+工厂只认识配置和 LangChain，不包含 Claim、证据或问答业务逻辑。sub2api 固定关闭
+Responses API；官方 OpenAI 和其他原生 Provider 使用各自 LangChain Integration 的默认协议。
 
 ### 3.3 `router.py`
 
@@ -91,7 +94,7 @@ tests/
 
 ### 3.4 `gateway.py`
 
-向业务层暴露稳定的调用入口：普通调用、结构化调用和流式调用。输入使用 LangChain 标准消息类型；sub2api 的结构化调用使用 LangChain `with_structured_output(..., method="json_mode")`，并必须通过 Pydantic Schema 校验，不接受未校验文本作为成功结果。
+向业务层暴露稳定的调用入口：普通调用、结构化调用和流式调用。输入使用 LangChain 标准消息类型；sub2api 的结构化调用使用 LangChain `with_structured_output(..., method="json_mode")`，其他 Provider 使用其原生默认结构化方式。所有结果都必须通过 Pydantic Schema 校验，不接受未校验文本作为成功结果。
 
 Gateway 的职责仅包括：
 
@@ -139,7 +142,7 @@ Gateway 不负责提示词拼接、证据判断、自动重试工作流或业务
 ## 6. 密钥与隐私
 
 - 应用只读取 `TRUSTKB_LLM_API_KEY`，不直接访问 sub2api 数据库或 OpenClaw 配置。
-- `.env.example` 只包含空占位符；真实 `.env` 已由 `.gitignore` 排除。
+- `.env.example` 只包含不可用的非秘密占位符；真实 `.env` 已由 `.gitignore` 排除。
 - 自动化测试不得读取真实 key。
 - sub2api 连通性测试必须显式启用，并通过当前进程环境注入 key，不写入文件。
 - 日志测试必须验证 `SecretStr`、Header、异常和配置对象不会泄露 key。
@@ -191,3 +194,4 @@ L0 不实现 SQLite Schema、Obsidian Adapter、LangGraph 工作流、Milvus 或
 5. 缺少或错误 key 时安全失败，不输出凭据。
 6. 所有默认测试离线通过，显式 smoke test 可以连接当前 WSL sub2api。
 7. 新增代码覆盖率不低于 80%，CI 和隐私扫描通过。
+8. OpenAI、Anthropic 与 Ollama 可通过同一工厂构造；Ollama 不要求伪造 API key。

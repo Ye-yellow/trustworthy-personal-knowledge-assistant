@@ -8,6 +8,7 @@ from langchain.chat_models import init_chat_model
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from trustworthy_kb.config import LLMSettings
+from trustworthy_kb.llm.errors import ModelConfigurationError
 
 _PROVIDER_ALIASES = {"sub2api": "openai"}
 
@@ -19,12 +20,18 @@ def create_chat_model(settings: LLMSettings, model_name: str) -> BaseChatModel:
     kwargs: dict[str, Any] = {
         "model": model_name,
         "model_provider": langchain_provider,
-        "api_key": settings.api_key.get_secret_value(),
         "timeout": settings.timeout_seconds,
         "max_retries": settings.max_retries,
     }
+    if settings.api_key is not None:
+        kwargs["api_key"] = settings.api_key.get_secret_value()
     if settings.base_url is not None:
         kwargs["base_url"] = settings.base_url
-    if langchain_provider == "openai":
+    if settings.provider == "sub2api":
         kwargs["use_responses_api"] = False
-    return cast(BaseChatModel, init_chat_model(**kwargs))
+    try:
+        return cast(BaseChatModel, init_chat_model(**kwargs))
+    except (ImportError, TypeError, ValueError):
+        raise ModelConfigurationError(
+            f"model configuration failed (provider={settings.provider}, model={model_name})"
+        ) from None

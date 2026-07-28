@@ -68,8 +68,11 @@ class ModelGateway:
 
         selection = self._router.route(purpose)
         config = _runnable_config(selection, metadata, tags)
-        runnable = selection.chat_model.with_structured_output(schema, method="json_mode")
         try:
+            if selection.provider == "sub2api":
+                runnable = selection.chat_model.with_structured_output(schema, method="json_mode")
+            else:
+                runnable = selection.chat_model.with_structured_output(schema)
             raw_result = await runnable.ainvoke(messages, config=config)
             if isinstance(raw_result, schema):
                 return raw_result
