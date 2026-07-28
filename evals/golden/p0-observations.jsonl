@@ -1,0 +1,6 @@
+{"case_id":"trusted-answer","citation_chunk_ids":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"refusal_code":null,"refused":false,"retrieved_chunk_ids":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]}
+{"case_id":"no-evidence","citation_chunk_ids":[],"refusal_code":"NO_TRUSTED_EVIDENCE","refused":true,"retrieved_chunk_ids":[]}
+{"case_id":"personal-general-isolation","citation_chunk_ids":[],"refusal_code":"NO_TRUSTED_EVIDENCE","refused":true,"retrieved_chunk_ids":[]}
+{"case_id":"version-mismatch","citation_chunk_ids":[],"refusal_code":"VERSION_MISMATCH","refused":true,"retrieved_chunk_ids":["cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"]}
+{"case_id":"quarantined-injection","citation_chunk_ids":[],"refusal_code":"NO_TRUSTED_EVIDENCE","refused":true,"retrieved_chunk_ids":[]}
+{"case_id":"false-citation","citation_chunk_ids":[],"refusal_code":"CITATION_VALIDATION_FAILED","refused":true,"retrieved_chunk_ids":["eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"]}

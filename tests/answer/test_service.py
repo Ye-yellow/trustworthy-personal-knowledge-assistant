@@ -4,9 +4,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from trustworthy_kb.answer import (
     AnswerDraft,
     AnswerEvidence,
+    AnswerIntegrityError,
     AnswerRequest,
     AnswerSnapshotStore,
     AnswerStatus,
@@ -63,6 +66,11 @@ class Retriever:
     async def retrieve(self, *_: Any, **__: Any) -> RetrievalResult:
         self.calls += 1
         return self.result
+
+
+class FailingRetriever:
+    async def retrieve(self, *_: Any, **__: Any) -> RetrievalResult:
+        raise ConnectionError("synthetic private dependency detail")
 
 
 class Resolver:
@@ -274,5 +282,132 @@ async def test_trusted_answer_service_refuses_without_evidence(tmp_path: Path) -
 
         assert result.status is AnswerStatus.REFUSED
         assert result.reason_code is RefusalCode.NO_TRUSTED_EVIDENCE
+    finally:
+        await engine.dispose()
+
+
+async def test_trusted_answer_service_refuses_when_retrieval_is_unavailable(
+    tmp_path: Path,
+) -> None:
+    engine, factory, _generation = await _factory(tmp_path)
+    service = TrustedAnswerService(
+        unit_of_work_factory=factory,
+        planner=Planner(QueryPlan(normalized_query="synthetic", scope=PlannedScope.GENERAL)),
+        retriever=FailingRetriever(),
+        evidence_resolver=Resolver(()),
+        generator=Generator(
+            AnswerDraft(
+                claims=(DraftAnswerClaim(statement="unused", citation_chunk_ids=("4" * 64,)),)
+            )
+        ),
+        verifier=Verifier(CitationVerificationOutput(decisions=())),
+        snapshots=AnswerSnapshotStore(tmp_path / "snapshots"),
+        settings=AnswerSettings(snapshot_root=str(tmp_path / "snapshots")),
+        model_name="sub2api/synthetic-model",
+    )
+    try:
+        result = await service.answer(
+            AnswerRequest(question="Synthetic retrieval failure?", operation_id="answer:offline")
+        )
+
+        assert result.status is AnswerStatus.REFUSED
+        assert result.reason_code is RefusalCode.RETRIEVAL_UNAVAILABLE
+        assert "dependency detail" not in result.message
+    finally:
+        await engine.dispose()
+
+
+async def test_trusted_answer_service_independently_rejects_unsupported_verifier_output(
+    tmp_path: Path,
+) -> None:
+    engine, factory, generation = await _factory(tmp_path)
+    evidence = _evidence(generation.id)
+    draft = AnswerDraft(
+        claims=(
+            DraftAnswerClaim(
+                statement="Python 3.12 supports the synthetic feature.",
+                citation_chunk_ids=(evidence.chunk_id,),
+            ),
+        )
+    )
+    service = TrustedAnswerService(
+        unit_of_work_factory=factory,
+        planner=Planner(
+            QueryPlan(
+                normalized_query="Python 3.12 synthetic feature",
+                scope=PlannedScope.GENERAL,
+                target_version="3.12",
+            )
+        ),
+        retriever=Retriever(_retrieval(evidence)),
+        evidence_resolver=Resolver((evidence,)),
+        generator=Generator(draft),
+        verifier=Verifier(
+            CitationVerificationOutput(
+                decisions=(
+                    CitationSupportDecision(
+                        claim_index=0,
+                        supported=False,
+                        supporting_chunk_ids=(),
+                        reason_code="NOT_ENTAILED",
+                    ),
+                )
+            )
+        ),
+        snapshots=AnswerSnapshotStore(tmp_path / "snapshots"),
+        settings=AnswerSettings(snapshot_root=str(tmp_path / "snapshots")),
+        model_name="sub2api/synthetic-model",
+    )
+    try:
+        result = await service.answer(
+            AnswerRequest(question="Does Python 3.12 support it?", operation_id="answer:false")
+        )
+
+        assert result.status is AnswerStatus.REFUSED
+        assert result.reason_code is RefusalCode.CITATION_VALIDATION_FAILED
+        assert not (tmp_path / "snapshots").exists()
+    finally:
+        await engine.dispose()
+
+
+async def test_trusted_answer_service_rejects_operation_id_reuse_for_another_question(
+    tmp_path: Path,
+) -> None:
+    engine, factory, generation = await _factory(tmp_path)
+    service = TrustedAnswerService(
+        unit_of_work_factory=factory,
+        planner=Planner(QueryPlan(normalized_query="unknown", scope=PlannedScope.GENERAL)),
+        retriever=Retriever(
+            RetrievalResult(
+                hits=(),
+                mode=RetrievalMode.HYBRID,
+                degraded=False,
+                generation_id=generation.id,
+            )
+        ),
+        evidence_resolver=Resolver(()),
+        generator=Generator(
+            AnswerDraft(
+                claims=(DraftAnswerClaim(statement="unused", citation_chunk_ids=("4" * 64,)),)
+            )
+        ),
+        verifier=Verifier(CitationVerificationOutput(decisions=())),
+        snapshots=AnswerSnapshotStore(tmp_path / "snapshots"),
+        settings=AnswerSettings(snapshot_root=str(tmp_path / "snapshots")),
+        model_name="sub2api/synthetic-model",
+    )
+    try:
+        first = await service.answer(
+            AnswerRequest(question="First synthetic question?", operation_id="answer:reused")
+        )
+        assert first.status is AnswerStatus.REFUSED
+
+        with pytest.raises(AnswerIntegrityError, match="reused"):
+            await service.answer(
+                AnswerRequest(
+                    question="Different synthetic question?",
+                    operation_id="answer:reused",
+                )
+            )
     finally:
         await engine.dispose()

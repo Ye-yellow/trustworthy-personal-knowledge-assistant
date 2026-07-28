@@ -4,7 +4,9 @@
 
 项目已完成 L0 工程/模型网关基线、L1 领域/SQLite 控制面、L2 本地 Markdown
 采集与故障恢复、L3 Claim/证据/质量治理，以及 L4 安全发布、Milvus 混合检索与三方对账。
-L5 可信问答 API 与评估尚未实现，因此当前版本仍不适合无人值守生产使用或处理唯一副本。
+L5 已提供仅监听回环地址的可信问答 JSON/SSE API、独立引用验证、确定性 Golden 门禁和
+显式 RAGAS 适配。当前版本仍不适合处理任何数据的唯一副本；正式使用前应先完成本机合成
+闭环验收，并为自己的知识域补充 Golden Dataset。
 
 ## 核心原则
 
@@ -70,7 +72,7 @@ Provider 切换只修改环境配置，业务调用代码不变：
 
 ## 当前可用：L1 SQLite 控制面
 
-L1/L3 提供类型化 ULID、冻结领域记录、显式状态机、21 张控制面表、Alembic 迁移、
+L1/L3/L5 提供类型化 ULID、冻结领域记录、显式状态机、22 张控制面表、Alembic 迁移、
 六组异步 Repository、append-only 审计哈希链、幂等租约协议和显式提交的
 `SqliteUnitOfWork`。业务代码不直接消费 ORM Table，也不能由 Repository 隐式提交。
 
@@ -186,6 +188,45 @@ volume；`scripts/milvus.ps1 status|logs|stop` 可管理服务。LLM 仍通过�
 sub2api，可随配置切换 Provider。完整契约见
 [L4 设计规格](docs/superpowers/specs/2026-07-28-l4-safe-publication-hybrid-retrieval-design.md)。
 
+## 当前可用：L5 可信问答 API 与评估
+
+L5 只读取当前 `ACTIVE` 索引代际，并依次执行查询规划、混合检索、SQLite 血缘解析、结构化
+Claim 生成和独立语义引用验证。任何阶段失败都会返回稳定的拒答码；未验证模型草稿不会进入
+JSON 或 SSE。SQLite 只保存问题、计划、答案和引用清单的哈希，已验证答案正文保存在被 Git
+忽略的内容寻址快照目录。
+
+先完成迁移、Milvus 与索引代际配置，再启动只监听本机的 API：
+
+```powershell
+uv sync --extra dev --extra retrieval --extra bge
+uv run alembic upgrade head
+uv run trustworthy-kb-api
+```
+
+默认端点为 `http://127.0.0.1:8765`：`GET /health/live`、`GET /health/ready`、
+`POST /v1/answers` 和 `POST /v1/answers/stream`。请求使用严格 JSON，例如：
+
+```json
+{"question":"这份可信知识库对该主题记录了什么？","scope":"auto","top_k":5}
+```
+
+提交的合成 Golden 集会在 CI 中执行，不调用网络或模型：
+
+```powershell
+uv run trustworthy-kb-eval deterministic
+```
+
+RAGAS 是显式、可选的本地评估，使用同一 `LLMSettings` Provider 边界；它不会读取真实 Vault，
+输入必须先转换为经过审查的本地 JSONL：
+
+```powershell
+uv sync --extra dev --extra eval
+uv run trustworthy-kb-eval ragas evals/golden/ragas-synthetic.jsonl
+```
+
+完整拒答、SSE、隐私和评估契约见
+[L5 设计规格](docs/superpowers/specs/2026-07-28-l5-trusted-qa-api-evaluation-design.md)。
+
 ## 开发与验证
 
 ```powershell
@@ -194,6 +235,7 @@ uv run ruff check .
 uv run ruff format --check .
 uv run mypy
 uv run pytest -m "not integration" --cov=trustworthy_kb
+uv run trustworthy-kb-eval deterministic
 uv run python scripts/check_public_repository.py
 uv run alembic upgrade head
 uv build

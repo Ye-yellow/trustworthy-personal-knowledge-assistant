@@ -26,6 +26,10 @@ from trustworthy_kb.answer.ports import (
 )
 from trustworthy_kb.answer.rendering import render_verified_answer
 from trustworthy_kb.answer.snapshot_store import AnswerSnapshotStore
+from trustworthy_kb.answer.verification import (
+    validate_citation_closed_set,
+    validate_semantic_support,
+)
 from trustworthy_kb.config import AnswerSettings
 from trustworthy_kb.domain import (
     AnswerRunId,
@@ -219,6 +223,13 @@ class TrustedAnswerService:
             return
         try:
             verification = await self._verifier.verify(draft, evidence)
+            validate_citation_closed_set(
+                draft,
+                evidence,
+                max_claims=self._settings.max_answer_claims,
+                max_claim_characters=self._settings.max_claim_characters,
+            )
+            validate_semantic_support(draft, verification)
             answer_markdown, citations = render_verified_answer(draft, evidence)
         except Exception:
             result = await self._refuse(
