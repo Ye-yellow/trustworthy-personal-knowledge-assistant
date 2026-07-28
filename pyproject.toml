@@ -91,3 +91,7 @@ python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 packages = ["trustworthy_kb"]
+
+[[tool.mypy.overrides]]
+module = ["huggingface_hub", "ragas", "ragas.*"]
+ignore_missing_imports = true
