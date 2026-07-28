@@ -8,6 +8,7 @@ from typing import Literal
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from trustworthy_kb.persistence.answer_repository import AnswerRepository
 from trustworthy_kb.persistence.audit_repository import AuditRepository
 from trustworthy_kb.persistence.errors import DatabaseConfigurationError
 from trustworthy_kb.persistence.governance_repository import GovernanceRepository
@@ -26,6 +27,7 @@ class SqliteUnitOfWork:
         self._session: AsyncSession | None = None
         self._committed = False
         self.sources: SourceRepository
+        self.answers: AnswerRepository
         self.knowledge: KnowledgeRepository
         self.publication: PublicationRepository
         self.audit: AuditRepository
@@ -37,6 +39,7 @@ class SqliteUnitOfWork:
             raise DatabaseConfigurationError("unit of work is already active")
         self._session = self._session_factory()
         self.sources = SourceRepository(self._session)
+        self.answers = AnswerRepository(self._session)
         self.knowledge = KnowledgeRepository(self._session)
         self.publication = PublicationRepository(self._session)
         self.audit = AuditRepository(self._session)

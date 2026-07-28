@@ -245,6 +245,50 @@ async def test_publication_saga_repository_activates_all_authoritative_pointers(
         assert await repository.resolve_current_versions((note.id,)) == {
             note.id: (version.id, generation.id)
         }
+
+        deleted_note, pending_delete = await repository.prepare_note_deletion(
+            active_note.id,
+            active_job.id,
+            expected_note_revision=active_note.revision,
+            expected_job_revision=active_job.revision,
+        )
+        assert deleted_note.deleted_at is not None
+        assert pending_delete.status is IndexJobStatus.DELETE_PENDING
+        assert await repository.resolve_current_versions((note.id,)) == {}
+        assert await repository.get_note(note.id, include_deleted=True) == deleted_note
+
+        deleted_job = await repository.transition_index_job(
+            pending_delete.id,
+            IndexJobStatus.DELETED,
+            expected_revision=pending_delete.revision,
+        )
+        pending_restore = await repository.transition_index_job(
+            deleted_job.id,
+            IndexJobStatus.PENDING,
+            expected_revision=deleted_job.revision,
+        )
+        indexing_restore = await repository.transition_index_job(
+            pending_restore.id,
+            IndexJobStatus.INDEXING,
+            expected_revision=pending_restore.revision,
+        )
+        indexed_restore = await repository.mark_index_job_indexed(
+            indexing_restore.id,
+            content_hash=version.content_hash,
+            indexed_chunk_count=2,
+            expected_revision=indexing_restore.revision,
+        )
+        restored_note, restored_job = await repository.restore_note(
+            deleted_note.id,
+            indexed_restore.id,
+            expected_note_revision=deleted_note.revision,
+            expected_job_revision=indexed_restore.revision,
+        )
+        assert restored_note.deleted_at is None
+        assert restored_job.status is IndexJobStatus.ACTIVE_INDEXED
+        assert await repository.resolve_current_versions((note.id,)) == {
+            note.id: (version.id, generation.id)
+        }
         await session.commit()
     finally:
         await session.close()

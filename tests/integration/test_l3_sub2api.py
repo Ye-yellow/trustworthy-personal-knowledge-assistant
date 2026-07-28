@@ -35,7 +35,7 @@ def _require_live() -> None:
 @pytest.mark.asyncio
 async def test_sub2api_structured_output_and_native_web_search() -> None:
     _require_live()
-    llm = LLMSettings()
+    llm = LLMSettings(_env_file=".env")
     gateway = ModelGateway(ModelRouter(llm))
 
     structured = await gateway.invoke_structured(
@@ -51,7 +51,10 @@ async def test_sub2api_structured_output_and_native_web_search() -> None:
         object=ClaimObject(value="docs.python.org", value_type="text"),
         scope=ClaimScope(domain="software"),
     )
-    search = create_search_gateway(SearchSettings(provider="sub2api"), llm)
+    search = create_search_gateway(
+        SearchSettings(_env_file=".env", provider="sub2api"),
+        llm,
+    )
     hits = await search.search(
         EvidenceSearchRequest(
             claim=public_claim,

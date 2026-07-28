@@ -5,6 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 
 from trustworthy_kb.domain.enums import (
+    AnswerRunStatus,
     ClaimStatus,
     CuratedVersionStatus,
     GovernanceItemStage,
@@ -23,6 +24,15 @@ from trustworthy_kb.domain.enums import (
 from trustworthy_kb.domain.errors import InvalidStateTransitionError
 
 _TRANSITIONS: dict[type[StrEnum], dict[StrEnum, frozenset[StrEnum]]] = {
+    AnswerRunStatus: {
+        AnswerRunStatus.IN_PROGRESS: frozenset(
+            {
+                AnswerRunStatus.ANSWERED,
+                AnswerRunStatus.REFUSED,
+                AnswerRunStatus.FAILED,
+            }
+        )
+    },
     SourceVersionStatus: {
         SourceVersionStatus.CAPTURED: frozenset(
             {
@@ -102,13 +112,17 @@ _TRANSITIONS: dict[type[StrEnum], dict[StrEnum, frozenset[StrEnum]]] = {
             {IndexGenerationStatus.ACTIVE, IndexGenerationStatus.FAILED}
         ),
         IndexGenerationStatus.ACTIVE: frozenset({IndexGenerationStatus.SUPERSEDED}),
+        IndexGenerationStatus.SUPERSEDED: frozenset({IndexGenerationStatus.ACTIVE}),
     },
     IndexJobStatus: {
         IndexJobStatus.PENDING: frozenset({IndexJobStatus.INDEXING}),
         IndexJobStatus.INDEXING: frozenset({IndexJobStatus.INDEXED, IndexJobStatus.FAILED}),
         IndexJobStatus.INDEXED: frozenset({IndexJobStatus.ACTIVE_INDEXED}),
         IndexJobStatus.ACTIVE_INDEXED: frozenset({IndexJobStatus.DELETE_PENDING}),
-        IndexJobStatus.DELETE_PENDING: frozenset({IndexJobStatus.DELETED}),
+        IndexJobStatus.DELETE_PENDING: frozenset(
+            {IndexJobStatus.DELETED, IndexJobStatus.ACTIVE_INDEXED}
+        ),
+        IndexJobStatus.DELETED: frozenset({IndexJobStatus.PENDING}),
         IndexJobStatus.FAILED: frozenset({IndexJobStatus.PENDING}),
     },
     KnowledgeChangeStatus: {

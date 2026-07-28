@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import cast
 
 from sqlalchemy import select, update
@@ -136,8 +137,18 @@ class PublicationRepository:
         await flush_safely(self._session, entity="knowledge note", identifier=record.id)
         return to_record(KnowledgeNoteRecord, row)
 
-    async def get_note(self, note_id: KnowledgeNoteId) -> KnowledgeNoteRecord:
-        return to_record(KnowledgeNoteRecord, await self._note_row(note_id))
+    async def get_note(
+        self,
+        note_id: KnowledgeNoteId,
+        *,
+        include_deleted: bool = False,
+    ) -> KnowledgeNoteRecord:
+        row = (
+            await self._required_row(KnowledgeNoteTable, note_id, "knowledge note")
+            if include_deleted
+            else await self._note_row(note_id)
+        )
+        return to_record(KnowledgeNoteRecord, row)
 
     async def find_note_by_path(self, canonical_path: str) -> KnowledgeNoteRecord | None:
         row = await self._session.scalar(
@@ -164,6 +175,142 @@ class PublicationRepository:
             statement.order_by(KnowledgeNoteTable.canonical_path, KnowledgeNoteTable.id)
         )
         return tuple(to_record(KnowledgeNoteRecord, row) for row in rows)
+
+    async def prepare_note_deletion(
+        self,
+        note_id: KnowledgeNoteId,
+        job_id: IndexJobId,
+        *,
+        expected_note_revision: int,
+        expected_job_revision: int,
+    ) -> tuple[KnowledgeNoteRecord, IndexJobRecord]:
+        """Atomically exclude one note from retrieval and queue exact index deletion."""
+
+        async with self._session.begin_nested():
+            note = await self._required_row(KnowledgeNoteTable, note_id, "knowledge note")
+            job = await self._required_row(IndexJobTable, job_id, "index job")
+            if note.revision != expected_note_revision:
+                raise concurrent("knowledge note", note_id)
+            if job.revision != expected_job_revision:
+                raise concurrent("index job", job_id)
+            if (
+                note.deleted_at is not None
+                or note.current_curated_version_id is None
+                or note.active_index_generation_id is None
+                or job.object_type is not EntityType.CURATED_VERSION
+                or job.object_id != note.current_curated_version_id
+                or job.generation_id != note.active_index_generation_id
+            ):
+                raise invariant("knowledge note deletion", note_id)
+            require_transition(job.status, IndexJobStatus.DELETE_PENDING)
+            now = utc_now()
+            deleted_note = await self._cas(
+                update(KnowledgeNoteTable)
+                .where(
+                    KnowledgeNoteTable.id == note_id,
+                    KnowledgeNoteTable.revision == expected_note_revision,
+                    KnowledgeNoteTable.deleted_at.is_(None),
+                )
+                .values(
+                    deleted_at=now,
+                    revision=expected_note_revision + 1,
+                    updated_at=now,
+                )
+                .returning(KnowledgeNoteTable),
+                select(KnowledgeNoteTable.id).where(KnowledgeNoteTable.id == note_id),
+                entity="knowledge note",
+                identifier=note_id,
+            )
+            pending_job = await self._cas(
+                update(IndexJobTable)
+                .where(
+                    IndexJobTable.id == job_id,
+                    IndexJobTable.revision == expected_job_revision,
+                )
+                .values(
+                    status=IndexJobStatus.DELETE_PENDING,
+                    error_category=None,
+                    revision=expected_job_revision + 1,
+                    updated_at=now,
+                )
+                .returning(IndexJobTable),
+                select(IndexJobTable.id).where(IndexJobTable.id == job_id),
+                entity="index job",
+                identifier=job_id,
+            )
+        return (
+            to_record(KnowledgeNoteRecord, deleted_note),
+            to_record(IndexJobRecord, pending_job),
+        )
+
+    async def restore_note(
+        self,
+        note_id: KnowledgeNoteId,
+        job_id: IndexJobId,
+        *,
+        expected_note_revision: int,
+        expected_job_revision: int,
+    ) -> tuple[KnowledgeNoteRecord, IndexJobRecord]:
+        """Atomically reopen a recycled note only after its index is verified."""
+
+        async with self._session.begin_nested():
+            note = await self._required_row(KnowledgeNoteTable, note_id, "knowledge note")
+            job = await self._required_row(IndexJobTable, job_id, "index job")
+            if note.revision != expected_note_revision:
+                raise concurrent("knowledge note", note_id)
+            if job.revision != expected_job_revision:
+                raise concurrent("index job", job_id)
+            if (
+                note.deleted_at is None
+                or note.current_curated_version_id is None
+                or note.active_index_generation_id is None
+                or job.status is not IndexJobStatus.INDEXED
+                or job.object_type is not EntityType.CURATED_VERSION
+                or job.object_id != note.current_curated_version_id
+                or job.generation_id != note.active_index_generation_id
+            ):
+                raise invariant("knowledge note restoration", note_id)
+            require_transition(job.status, IndexJobStatus.ACTIVE_INDEXED)
+            now = utc_now()
+            restored_note = await self._cas(
+                update(KnowledgeNoteTable)
+                .where(
+                    KnowledgeNoteTable.id == note_id,
+                    KnowledgeNoteTable.revision == expected_note_revision,
+                    KnowledgeNoteTable.deleted_at.is_not(None),
+                )
+                .values(
+                    deleted_at=None,
+                    revision=expected_note_revision + 1,
+                    updated_at=now,
+                )
+                .returning(KnowledgeNoteTable),
+                select(KnowledgeNoteTable.id).where(KnowledgeNoteTable.id == note_id),
+                entity="knowledge note",
+                identifier=note_id,
+            )
+            active_job = await self._cas(
+                update(IndexJobTable)
+                .where(
+                    IndexJobTable.id == job_id,
+                    IndexJobTable.revision == expected_job_revision,
+                )
+                .values(
+                    status=IndexJobStatus.ACTIVE_INDEXED,
+                    error_category=None,
+                    last_verified_at=now,
+                    revision=expected_job_revision + 1,
+                    updated_at=now,
+                )
+                .returning(IndexJobTable),
+                select(IndexJobTable.id).where(IndexJobTable.id == job_id),
+                entity="index job",
+                identifier=job_id,
+            )
+        return (
+            to_record(KnowledgeNoteRecord, restored_note),
+            to_record(IndexJobRecord, active_job),
+        )
 
     async def add_curated_version(
         self,
@@ -335,6 +482,144 @@ class PublicationRepository:
         )
         return tuple(to_record(IndexGenerationRecord, row) for row in rows)
 
+    async def promote_index_generation(
+        self,
+        generation_id: IndexGenerationId,
+        *,
+        expected_revision: int,
+    ) -> tuple[IndexGenerationRecord, IndexGenerationRecord, int]:
+        """Atomically move every live note from ACTIVE to one fully indexed STAGING generation."""
+
+        async with self._session.begin_nested():
+            target = await self._required_row(
+                IndexGenerationTable, generation_id, "index generation"
+            )
+            source = await self._session.scalar(
+                select(IndexGenerationTable).where(
+                    IndexGenerationTable.status == IndexGenerationStatus.ACTIVE
+                )
+            )
+            if target.revision != expected_revision:
+                raise concurrent("index generation", generation_id)
+            if source is None or source.id == target.id:
+                raise invariant("index generation promotion", generation_id)
+            require_transition(target.status, IndexGenerationStatus.ACTIVE)
+            require_transition(source.status, IndexGenerationStatus.SUPERSEDED)
+            notes = tuple(
+                await self._session.scalars(
+                    select(KnowledgeNoteTable)
+                    .where(
+                        KnowledgeNoteTable.deleted_at.is_(None),
+                        KnowledgeNoteTable.current_curated_version_id.is_not(None),
+                        KnowledgeNoteTable.active_index_generation_id == source.id,
+                    )
+                    .order_by(KnowledgeNoteTable.id)
+                )
+            )
+            await self._require_all_live_notes_on_generation(source.id)
+            jobs = await self._generation_switch_jobs(
+                notes,
+                source.id,
+                target.id,
+                source_status=IndexJobStatus.ACTIVE_INDEXED,
+                target_status=IndexJobStatus.INDEXED,
+            )
+            now = utc_now()
+            superseded_source = await self._set_generation_status(
+                source,
+                IndexGenerationStatus.SUPERSEDED,
+                activated_at=source.activated_at,
+            )
+            active_target = await self._set_generation_status(
+                target,
+                IndexGenerationStatus.ACTIVE,
+                activated_at=now,
+            )
+            for note, source_job, target_job in jobs:
+                await self._switch_note_generation(
+                    note,
+                    source_job,
+                    target_job,
+                    target_generation_id=target.id,
+                    source_job_status=IndexJobStatus.DELETE_PENDING,
+                    target_job_status=IndexJobStatus.ACTIVE_INDEXED,
+                    now=now,
+                )
+        return (
+            to_record(IndexGenerationRecord, superseded_source),
+            to_record(IndexGenerationRecord, active_target),
+            len(notes),
+        )
+
+    async def rollback_index_generation(
+        self,
+        generation_id: IndexGenerationId,
+        *,
+        expected_revision: int,
+    ) -> tuple[IndexGenerationRecord, IndexGenerationRecord, int]:
+        """Atomically repoint every live note to a verified retained SUPERSEDED generation."""
+
+        async with self._session.begin_nested():
+            target = await self._required_row(
+                IndexGenerationTable, generation_id, "index generation"
+            )
+            current = await self._session.scalar(
+                select(IndexGenerationTable).where(
+                    IndexGenerationTable.status == IndexGenerationStatus.ACTIVE
+                )
+            )
+            if target.revision != expected_revision:
+                raise concurrent("index generation", generation_id)
+            if current is None or current.id == target.id:
+                raise invariant("index generation rollback", generation_id)
+            require_transition(target.status, IndexGenerationStatus.ACTIVE)
+            require_transition(current.status, IndexGenerationStatus.SUPERSEDED)
+            notes = tuple(
+                await self._session.scalars(
+                    select(KnowledgeNoteTable)
+                    .where(
+                        KnowledgeNoteTable.deleted_at.is_(None),
+                        KnowledgeNoteTable.current_curated_version_id.is_not(None),
+                        KnowledgeNoteTable.active_index_generation_id == current.id,
+                    )
+                    .order_by(KnowledgeNoteTable.id)
+                )
+            )
+            await self._require_all_live_notes_on_generation(current.id)
+            jobs = await self._generation_switch_jobs(
+                notes,
+                current.id,
+                target.id,
+                source_status=IndexJobStatus.ACTIVE_INDEXED,
+                target_status=IndexJobStatus.DELETE_PENDING,
+            )
+            now = utc_now()
+            superseded_current = await self._set_generation_status(
+                current,
+                IndexGenerationStatus.SUPERSEDED,
+                activated_at=current.activated_at,
+            )
+            active_target = await self._set_generation_status(
+                target,
+                IndexGenerationStatus.ACTIVE,
+                activated_at=now,
+            )
+            for note, current_job, target_job in jobs:
+                await self._switch_note_generation(
+                    note,
+                    current_job,
+                    target_job,
+                    target_generation_id=target.id,
+                    source_job_status=IndexJobStatus.DELETE_PENDING,
+                    target_job_status=IndexJobStatus.ACTIVE_INDEXED,
+                    now=now,
+                )
+        return (
+            to_record(IndexGenerationRecord, superseded_current),
+            to_record(IndexGenerationRecord, active_target),
+            len(notes),
+        )
+
     async def add_index_job(self, record: IndexJobRecord) -> IndexJobRecord:
         if record.revision != 1 or record.status is not IndexJobStatus.PENDING:
             raise invariant("index job creation", record.id)
@@ -381,6 +666,20 @@ class PublicationRepository:
     async def find_index_job(self, operation_id: str) -> IndexJobRecord | None:
         row = await self._session.scalar(
             select(IndexJobTable).where(IndexJobTable.operation_id == operation_id)
+        )
+        return None if row is None else to_record(IndexJobRecord, row)
+
+    async def find_version_index_job(
+        self,
+        version_id: CuratedVersionId,
+        generation_id: IndexGenerationId,
+    ) -> IndexJobRecord | None:
+        row = await self._session.scalar(
+            select(IndexJobTable).where(
+                IndexJobTable.object_type == EntityType.CURATED_VERSION,
+                IndexJobTable.object_id == version_id,
+                IndexJobTable.generation_id == generation_id,
+            )
         )
         return None if row is None else to_record(IndexJobRecord, row)
 
@@ -584,6 +883,14 @@ class PublicationRepository:
                     )
                 )
                 if old_generation is not None and old_generation.id != generation.id:
+                    active_note = await self._session.scalar(
+                        select(KnowledgeNoteTable.id).where(
+                            KnowledgeNoteTable.deleted_at.is_(None),
+                            KnowledgeNoteTable.active_index_generation_id == old_generation.id,
+                        )
+                    )
+                    if active_note is not None:
+                        raise invariant("index generation requires full migration", generation.id)
                     require_transition(old_generation.status, IndexGenerationStatus.SUPERSEDED)
                     await self._cas(
                         update(IndexGenerationTable)
@@ -731,6 +1038,125 @@ class PublicationRepository:
 
     async def _curated_row(self, version_id: CuratedVersionId) -> CuratedVersionTable:
         return await self._required_row(CuratedVersionTable, version_id, "curated version")
+
+    async def _generation_switch_jobs(
+        self,
+        notes: Sequence[KnowledgeNoteTable],
+        source_generation_id: IndexGenerationId,
+        target_generation_id: IndexGenerationId,
+        *,
+        source_status: IndexJobStatus,
+        target_status: IndexJobStatus,
+    ) -> tuple[tuple[KnowledgeNoteTable, IndexJobTable, IndexJobTable], ...]:
+        jobs: list[tuple[KnowledgeNoteTable, IndexJobTable, IndexJobTable]] = []
+        for note in notes:
+            version_id = note.current_curated_version_id
+            if version_id is None:
+                raise invariant("index generation note", note.id)
+            source_job = await self._session.scalar(
+                select(IndexJobTable).where(
+                    IndexJobTable.object_type == EntityType.CURATED_VERSION,
+                    IndexJobTable.object_id == version_id,
+                    IndexJobTable.generation_id == source_generation_id,
+                )
+            )
+            target_job = await self._session.scalar(
+                select(IndexJobTable).where(
+                    IndexJobTable.object_type == EntityType.CURATED_VERSION,
+                    IndexJobTable.object_id == version_id,
+                    IndexJobTable.generation_id == target_generation_id,
+                )
+            )
+            if source_job is None or target_job is None:
+                raise invariant("index generation jobs", note.id)
+            if source_job.status is not source_status or target_job.status is not target_status:
+                raise invariant("index generation jobs", note.id)
+            jobs.append((note, source_job, target_job))
+        return tuple(jobs)
+
+    async def _require_all_live_notes_on_generation(self, generation_id: IndexGenerationId) -> None:
+        stray = await self._session.scalar(
+            select(KnowledgeNoteTable.id).where(
+                KnowledgeNoteTable.deleted_at.is_(None),
+                KnowledgeNoteTable.current_curated_version_id.is_not(None),
+                KnowledgeNoteTable.active_index_generation_id != generation_id,
+            )
+        )
+        if stray is not None:
+            raise invariant("index generation has mixed live pointers", generation_id)
+
+    async def _set_generation_status(
+        self,
+        generation: IndexGenerationTable,
+        status: IndexGenerationStatus,
+        *,
+        activated_at: datetime | None,
+    ) -> IndexGenerationTable:
+        return cast(
+            IndexGenerationTable,
+            await self._cas(
+                update(IndexGenerationTable)
+                .where(
+                    IndexGenerationTable.id == generation.id,
+                    IndexGenerationTable.revision == generation.revision,
+                )
+                .values(
+                    status=status,
+                    activated_at=activated_at,
+                    revision=generation.revision + 1,
+                )
+                .returning(IndexGenerationTable),
+                select(IndexGenerationTable.id).where(IndexGenerationTable.id == generation.id),
+                entity="index generation",
+                identifier=generation.id,
+            ),
+        )
+
+    async def _switch_note_generation(
+        self,
+        note: KnowledgeNoteTable,
+        source_job: IndexJobTable,
+        target_job: IndexJobTable,
+        *,
+        target_generation_id: IndexGenerationId,
+        source_job_status: IndexJobStatus,
+        target_job_status: IndexJobStatus,
+        now: datetime,
+    ) -> None:
+        await self._cas(
+            update(KnowledgeNoteTable)
+            .where(
+                KnowledgeNoteTable.id == note.id,
+                KnowledgeNoteTable.revision == note.revision,
+                KnowledgeNoteTable.deleted_at.is_(None),
+            )
+            .values(
+                active_index_generation_id=target_generation_id,
+                revision=note.revision + 1,
+                updated_at=now,
+            )
+            .returning(KnowledgeNoteTable),
+            select(KnowledgeNoteTable.id).where(KnowledgeNoteTable.id == note.id),
+            entity="knowledge note",
+            identifier=note.id,
+        )
+        for job, status in ((source_job, source_job_status), (target_job, target_job_status)):
+            require_transition(job.status, status)
+            await self._cas(
+                update(IndexJobTable)
+                .where(IndexJobTable.id == job.id, IndexJobTable.revision == job.revision)
+                .values(
+                    status=status,
+                    error_category=None,
+                    last_verified_at=now,
+                    revision=job.revision + 1,
+                    updated_at=now,
+                )
+                .returning(IndexJobTable),
+                select(IndexJobTable.id).where(IndexJobTable.id == job.id),
+                entity="index job",
+                identifier=job.id,
+            )
 
     async def _update_curated_version(
         self,

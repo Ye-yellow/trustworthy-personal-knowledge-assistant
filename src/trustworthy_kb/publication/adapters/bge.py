@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import importlib
 import math
+import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from numbers import Real
+from pathlib import Path
 from typing import Any, Protocol, cast
 
 from trustworthy_kb.publication.contracts import RerankItem
@@ -32,17 +34,25 @@ class BgeM3Embedding:
         batch_size: int = 16,
         max_length: int = 8192,
         use_fp16: bool | None = None,
+        cache_dir: str | Path | None = None,
         model_factory: Callable[..., object] | None = None,
     ) -> None:
         if not model_name.strip() or dimension < 2 or batch_size < 1 or max_length < 1:
             raise ValueError("BGE embedding configuration is invalid")
-        factory = model_factory or _flag_embedding_factory("BGEM3FlagModel")
+        if model_factory is None:
+            model_source = _resolve_model_source(model_name, cache_dir=cache_dir)
+            factory = _flag_embedding_factory("BGEM3FlagModel")
+        else:
+            model_source = model_name
+            factory = model_factory
         kwargs: dict[str, object] = {
             "use_fp16": (_device_supports_fp16(device) if use_fp16 is None else use_fp16)
         }
+        if cache_dir is not None:
+            kwargs["cache_dir"] = str(Path(cache_dir))
         if device is not None:
             kwargs["devices"] = device
-        self._model = cast(_EmbeddingModel, factory(model_name, **kwargs))
+        self._model = cast(_EmbeddingModel, factory(model_source, **kwargs))
         self._model_name = model_name.strip()
         self._dimension = dimension
         self._batch_size = batch_size
@@ -93,17 +103,25 @@ class BgeReranker:
         batch_size: int = 8,
         max_length: int = 8192,
         use_fp16: bool | None = None,
+        cache_dir: str | Path | None = None,
         model_factory: Callable[..., object] | None = None,
     ) -> None:
         if not model_name.strip() or batch_size < 1 or max_length < 1:
             raise ValueError("BGE reranker configuration is invalid")
-        factory = model_factory or _flag_embedding_factory("FlagReranker")
+        if model_factory is None:
+            model_source = _resolve_model_source(model_name, cache_dir=cache_dir)
+            factory = _flag_embedding_factory("FlagReranker")
+        else:
+            model_source = model_name
+            factory = model_factory
         kwargs: dict[str, object] = {
             "use_fp16": (_device_supports_fp16(device) if use_fp16 is None else use_fp16)
         }
+        if cache_dir is not None:
+            kwargs["cache_dir"] = str(Path(cache_dir))
         if device is not None:
             kwargs["devices"] = device
-        self._model = cast(_RerankerModel, factory(model_name, **kwargs))
+        self._model = cast(_RerankerModel, factory(model_source, **kwargs))
         self._model_name = model_name.strip()
         self._batch_size = batch_size
         self._max_length = max_length
@@ -170,6 +188,41 @@ def _flag_embedding_factory(name: str) -> Callable[..., object]:
             "BGE support is not installed; run 'uv sync --extra retrieval --extra bge'"
         ) from None
     return cast(Callable[..., object], factory)
+
+
+def _resolve_model_source(model_name: str, *, cache_dir: str | Path | None) -> str:
+    """Download only inference files, excluding large alternate ONNX assets."""
+
+    local = Path(model_name).expanduser()
+    if local.exists():
+        return str(local.resolve(strict=True))
+    if cache_dir is None:
+        return model_name
+    # The native xet transfer path can stall behind common Windows loopback
+    # proxies. Users can explicitly set this to "0" to opt back in.
+    os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError:
+        raise RuntimeError(
+            "BGE support is not installed; run 'uv sync --extra retrieval --extra bge'"
+        ) from None
+    snapshot: str = snapshot_download(
+        repo_id=model_name,
+        cache_dir=str(Path(cache_dir)),
+        allow_patterns=[
+            "config.json",
+            "model.safetensors",
+            "pytorch_model.bin",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "special_tokens_map.json",
+            "sentencepiece.bpe.model",
+            "colbert_linear.pt",
+            "sparse_linear.pt",
+        ],
+    )
+    return snapshot
 
 
 def _device_supports_fp16(device: str | None) -> bool:

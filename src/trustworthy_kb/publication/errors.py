@@ -31,10 +31,15 @@ class ReconciliationError(PublicationError):
     """The three-way reconciliation operation failed safely."""
 
 
+class LifecycleError(PublicationError):
+    """A delete, restore, migration, or rollback could not converge safely."""
+
+
 __all__ = [
     "ChunkingError",
     "CurationError",
     "IndexingError",
+    "LifecycleError",
     "PublicationError",
     "ReconciliationError",
     "RetrievalError",

@@ -44,5 +44,8 @@ jobs:
       - name: Run offline tests with coverage
         run: uv run pytest -m "not integration" --cov=trustworthy_kb --cov-report=term-missing
 
+      - name: Enforce deterministic trusted-answer quality gate
+        run: uv run trustworthy-kb-eval deterministic
+
       - name: Build package
         run: uv build

@@ -9,12 +9,15 @@ import os
 import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import cast
 
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from trustworthy_kb.answer.snapshot_store import AnswerSnapshotStore
 from trustworthy_kb.config import (
+    AnswerSettings,
     DatabaseSettings,
     GovernanceSettings,
     LLMSettings,
@@ -26,6 +29,7 @@ from trustworthy_kb.domain import (
     IndexGenerationRecord,
     IndexGenerationStatus,
     KnowledgeChangeId,
+    KnowledgeNoteId,
     Sensitivity,
 )
 from trustworthy_kb.governance.audit import AuditedModelGateway
@@ -52,7 +56,12 @@ from trustworthy_kb.publication.curation import (
     ModelCurationPlanner,
 )
 from trustworthy_kb.publication.errors import PublicationError, RetrievalError
+from trustworthy_kb.publication.generation_lifecycle import (
+    GenerationLifecycleService,
+    GenerationPromotionGate,
+)
 from trustworthy_kb.publication.indexing import GenerationIndexer
+from trustworthy_kb.publication.lifecycle import NoteLifecycleService
 from trustworthy_kb.publication.reconciliation import PublicationReconciler
 from trustworthy_kb.publication.retrieval import HybridRetriever
 from trustworthy_kb.publication.runner import PublicationRunner
@@ -89,6 +98,16 @@ class _Runtime:
             dimension=self.retrieval.embedding_dimension,
             device=self.retrieval.embedding_device,
             batch_size=self.retrieval.embedding_batch_size,
+            cache_dir=self.retrieval.model_cache_root_value / "hub",
+        )
+
+    def vault(self) -> AtomicVaultPublisher:
+        return AtomicVaultPublisher(
+            self.publication.vault_path_value,
+            staging_root=self.publication.staging_root,
+            versions_root=self.publication.versions_root,
+            trash_root=self.publication.trash_root,
+            max_bytes=self.publication.max_markdown_bytes,
         )
 
 
@@ -98,6 +117,21 @@ def _parser() -> argparse.ArgumentParser:
     generation = commands.add_parser("generation", help="manage immutable index generations")
     generation_commands = generation.add_subparsers(dest="generation_command", required=True)
     generation_commands.add_parser("create", help="create or reuse the configured generation")
+    rebuild = generation_commands.add_parser(
+        "rebuild", help="rebuild all live notes into a staging generation"
+    )
+    rebuild.add_argument("generation_id")
+    rebuild.add_argument("--operation-id")
+    promote = generation_commands.add_parser(
+        "promote", help="atomically activate a rebuilt generation after its quality gate"
+    )
+    promote.add_argument("generation_id")
+    promote.add_argument("--gate-report", type=Path, required=True)
+    promote.add_argument("--operation-id")
+    for action in ("rollback", "abort"):
+        command = generation_commands.add_parser(action)
+        command.add_argument("generation_id")
+        command.add_argument("--operation-id")
 
     publish = commands.add_parser("publish", help="publish one governed knowledge change")
     publish.add_argument("change_id")
@@ -113,6 +147,13 @@ def _parser() -> argparse.ArgumentParser:
     reconcile = commands.add_parser("reconcile", help="verify Vault and repair index drift")
     reconcile.add_argument("--generation-id")
     reconcile.add_argument("--no-repair", action="store_true")
+
+    lifecycle = commands.add_parser("lifecycle", help="delete or restore one published note")
+    lifecycle_commands = lifecycle.add_subparsers(dest="lifecycle_command", required=True)
+    for action in ("delete", "restore"):
+        command = lifecycle_commands.add_parser(action)
+        command.add_argument("note_id")
+        command.add_argument("--operation-id")
     return parser
 
 
@@ -121,7 +162,11 @@ async def _run(args: argparse.Namespace) -> object:
     try:
         await runtime.initialize()
         if args.command == "generation":
-            return (await _create_generation(runtime)).model_dump(mode="json")
+            if args.generation_command == "create":
+                return (await _create_generation(runtime)).model_dump(mode="json")
+            return await _generation_lifecycle(runtime, args)
+        if args.command == "lifecycle":
+            return await _lifecycle(runtime, args)
         generation = await _select_generation(runtime, getattr(args, "generation_id", None))
         if args.command == "publish":
             return await _publish(runtime, args, generation)
@@ -182,6 +227,31 @@ async def _create_generation(runtime: _Runtime) -> IndexGenerationRecord:
     return created
 
 
+async def _generation_lifecycle(runtime: _Runtime, args: argparse.Namespace) -> object:
+    generation_id = IndexGenerationId(args.generation_id)
+    operation_id = args.operation_id or f"generation:{args.generation_command}:{generation_id}"
+    service = GenerationLifecycleService(
+        unit_of_work_factory=runtime.factory,
+        snapshots=PublicationSnapshotStore(runtime.publication.snapshot_root_value),
+        chunker=MarkdownChunker(version=runtime.publication.chunker_version),
+        indexer=GenerationIndexer(runtime.embedding(), runtime.index),
+        index=runtime.index,
+    )
+    if args.generation_command == "rebuild":
+        report = await service.rebuild(generation_id, operation_id=operation_id)
+    elif args.generation_command == "promote":
+        report = await service.promote(
+            generation_id,
+            gate=GenerationPromotionGate.load(args.gate_report),
+            operation_id=operation_id,
+        )
+    elif args.generation_command == "rollback":
+        report = await service.rollback(generation_id, operation_id=operation_id)
+    else:
+        report = await service.abort(generation_id, operation_id=operation_id)
+    return report.model_dump(mode="json")
+
+
 async def _select_generation(
     runtime: _Runtime, raw_generation_id: str | None
 ) -> IndexGenerationRecord:
@@ -231,12 +301,7 @@ async def _publish(
         ),
         renderer=CuratedMarkdownRenderer(),
         chunker=MarkdownChunker(version=runtime.publication.chunker_version),
-        vault=AtomicVaultPublisher(
-            runtime.publication.vault_path_value,
-            staging_root=runtime.publication.staging_root,
-            versions_root=runtime.publication.versions_root,
-            max_bytes=runtime.publication.max_markdown_bytes,
-        ),
+        vault=runtime.vault(),
         indexer=GenerationIndexer(embedding, runtime.index),
         snapshots=PublicationSnapshotStore(runtime.publication.snapshot_root_value),
         model_name=f"{llm.provider}/{llm.curation_model or llm.model}",
@@ -269,6 +334,7 @@ async def _retrieve(
             model_name=runtime.retrieval.reranker_model,
             device=runtime.retrieval.reranker_device,
             batch_size=runtime.retrieval.reranker_batch_size,
+            cache_dir=runtime.retrieval.model_cache_root_value / "hub",
         )
     )
     result = await HybridRetriever(
@@ -309,6 +375,22 @@ async def _retrieve(
     }
 
 
+async def _lifecycle(runtime: _Runtime, args: argparse.Namespace) -> object:
+    note_id = KnowledgeNoteId(args.note_id)
+    operation_id = args.operation_id or f"{args.lifecycle_command}:{note_id}"
+    service = NoteLifecycleService(
+        unit_of_work_factory=runtime.factory,
+        snapshots=PublicationSnapshotStore(runtime.publication.snapshot_root_value),
+        chunker=MarkdownChunker(version=runtime.publication.chunker_version),
+        indexer=GenerationIndexer(runtime.embedding(), runtime.index),
+        vault=runtime.vault(),
+        answers=AnswerSnapshotStore(AnswerSettings(_env_file=".env").snapshot_root_value),
+    )
+    method = service.delete if args.lifecycle_command == "delete" else service.restore
+    report = await method(note_id, operation_id=operation_id)
+    return report.model_dump(mode="json")
+
+
 async def _reconcile(
     runtime: _Runtime,
     args: argparse.Namespace,
@@ -347,12 +429,7 @@ async def _reconcile(
             )
         )
     report = await PublicationReconciler(
-        vault=AtomicVaultPublisher(
-            runtime.publication.vault_path_value,
-            staging_root=runtime.publication.staging_root,
-            versions_root=runtime.publication.versions_root,
-            max_bytes=runtime.publication.max_markdown_bytes,
-        ),
+        vault=runtime.vault(),
         index=runtime.index,
         indexer=GenerationIndexer(embedding, runtime.index),
         repair_index=not args.no_repair,

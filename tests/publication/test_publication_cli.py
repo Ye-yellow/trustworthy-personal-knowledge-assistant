@@ -42,3 +42,51 @@ def test_publication_cli_reports_only_safe_failures(
 
     assert captured.value.code == 1
     assert capsys.readouterr().err.strip() == "safe publication failure"
+
+
+def test_publication_cli_parses_recoverable_lifecycle_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def fake_run(args: Any) -> object:
+        assert args.command == "lifecycle"
+        assert args.lifecycle_command == "restore"
+        assert args.note_id == "kn_test"
+        assert args.operation_id == "restore-test"
+        return {"deleted": False, "index_status": "ACTIVE_INDEXED"}
+
+    monkeypatch.setattr(cli, "_run", fake_run)
+    cli.main(["lifecycle", "restore", "kn_test", "--operation-id", "restore-test"])
+
+    assert json.loads(capsys.readouterr().out) == {
+        "deleted": False,
+        "index_status": "ACTIVE_INDEXED",
+    }
+
+
+def test_publication_cli_parses_gated_generation_promotion(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def fake_run(args: Any) -> object:
+        assert args.command == "generation"
+        assert args.generation_command == "promote"
+        assert args.generation_id == "ig_test"
+        assert args.gate_report.name == "gate.json"
+        return {"action": "PROMOTE", "active_generation_id": "ig_test"}
+
+    monkeypatch.setattr(cli, "_run", fake_run)
+    cli.main(
+        [
+            "generation",
+            "promote",
+            "ig_test",
+            "--gate-report",
+            "gate.json",
+        ]
+    )
+
+    assert json.loads(capsys.readouterr().out) == {
+        "action": "PROMOTE",
+        "active_generation_id": "ig_test",
+    }

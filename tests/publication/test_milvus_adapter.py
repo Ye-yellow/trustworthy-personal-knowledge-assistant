@@ -150,6 +150,7 @@ async def test_milvus_adapter_creates_upserts_searches_probes_and_deletes() -> N
     item = _indexed()
 
     await adapter.ensure_generation(generation_number=1, embedding_dimension=3)
+    assert await adapter.has_generation(1)
     await adapter.ensure_generation(generation_number=1, embedding_dimension=3)
     await adapter.upsert(1, (item,))
 

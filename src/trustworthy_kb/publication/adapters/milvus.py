@@ -90,6 +90,17 @@ class MilvusVectorIndex:
                 self._ensure_generation_sync, generation_number, embedding_dimension
             )
 
+    async def has_generation(self, generation_number: int) -> bool:
+        """Check collection existence without creating or mutating a generation."""
+
+        return bool(
+            await asyncio.to_thread(
+                self._client.has_collection,
+                collection_name=self.collection_name(generation_number),
+                timeout=self._timeout,
+            )
+        )
+
     async def upsert(self, generation_number: int, chunks: Sequence[IndexedChunk]) -> None:
         if not chunks:
             return

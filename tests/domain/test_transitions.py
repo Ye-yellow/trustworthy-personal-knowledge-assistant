@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from trustworthy_kb.domain import (
+    AnswerRunStatus,
     ClaimStatus,
     CuratedVersionStatus,
     GovernanceItemStage,
@@ -28,6 +29,7 @@ from trustworthy_kb.domain import (
         (SourceVersionStatus.CAPTURED, SourceVersionStatus.PARSED),
         (SourceVersionStatus.PARSE_FAILED, SourceVersionStatus.PARSED),
         (ClaimStatus.PROPOSED, ClaimStatus.VERIFIED),
+        (AnswerRunStatus.IN_PROGRESS, AnswerRunStatus.ANSWERED),
         (ClaimStatus.VERIFIED, ClaimStatus.SUPERSEDED),
         (CuratedVersionStatus.DRAFT, CuratedVersionStatus.VALIDATING),
         (IndexGenerationStatus.STAGING, IndexGenerationStatus.ACTIVE),
@@ -54,9 +56,10 @@ def test_declared_transitions_are_allowed(current: object, target: object) -> No
     [
         (SourceVersionStatus.READY, SourceVersionStatus.PARSED),
         (ClaimStatus.CONTESTED, ClaimStatus.VERIFIED),
+        (AnswerRunStatus.ANSWERED, AnswerRunStatus.IN_PROGRESS),
         (CuratedVersionStatus.ACTIVE, CuratedVersionStatus.DRAFT),
         (IndexGenerationStatus.FAILED, IndexGenerationStatus.ACTIVE),
-        (IndexJobStatus.DELETED, IndexJobStatus.PENDING),
+        (IndexJobStatus.DELETED, IndexJobStatus.ACTIVE_INDEXED),
         (KnowledgeChangeStatus.FAILED, KnowledgeChangeStatus.VALIDATING),
         (ModelRunStatus.SUCCEEDED, ModelRunStatus.STARTED),
         (IdempotencyStatus.SUCCEEDED, IdempotencyStatus.IN_PROGRESS),

@@ -1,5 +1,6 @@
 """Public persistence construction interfaces."""
 
+from trustworthy_kb.persistence import answer_tables as _answer_tables
 from trustworthy_kb.persistence import audit_tables as _audit_tables
 from trustworthy_kb.persistence import governance_tables as _governance_tables
 from trustworthy_kb.persistence import ingestion_tables as _ingestion_tables
@@ -11,6 +12,7 @@ from trustworthy_kb.persistence.database import create_database_engine, create_s
 from trustworthy_kb.persistence.unit_of_work import SqliteUnitOfWork, SqliteUnitOfWorkFactory
 
 _REGISTERED_TABLE_MODULES = (
+    _answer_tables,
     _audit_tables,
     _ingestion_tables,
     _governance_tables,

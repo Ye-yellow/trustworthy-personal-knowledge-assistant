@@ -26,6 +26,7 @@ class PublicationSettings(BaseSettings):
     snapshot_root: SecretStr = SecretStr("./storage/publication-snapshots")
     staging_root: str = "_AI/Staging"
     versions_root: str = "_AI/Versions"
+    trash_root: str = "_AI/Trash"
     note_root: str = "40-Concepts"
     prompt_version: str = "curation-v1"
     chunker_version: str = "markdown-v1"
@@ -41,7 +42,7 @@ class PublicationSettings(BaseSettings):
             raise ValueError("publication paths must not be empty")
         return SecretStr(normalized)
 
-    @field_validator("staging_root", "versions_root", "note_root", mode="before")
+    @field_validator("staging_root", "versions_root", "trash_root", "note_root", mode="before")
     @classmethod
     def _relative_root(cls, value: object) -> str:
         text = str(value).strip()
@@ -74,7 +75,7 @@ class PublicationSettings(BaseSettings):
         snapshot = snapshot_input.resolve(strict=False)
         if snapshot == vault or snapshot.is_relative_to(vault) or vault.is_relative_to(snapshot):
             raise ValueError("publication snapshot root must not overlap the Vault")
-        roots = (self.staging_root, self.versions_root, self.note_root)
+        roots = (self.staging_root, self.versions_root, self.trash_root, self.note_root)
         if len(set(roots)) != len(roots):
             raise ValueError("publication Vault roots must be distinct")
         return self
