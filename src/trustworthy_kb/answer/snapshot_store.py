@@ -38,6 +38,13 @@ class AnswerSnapshotStore:
     async def get(self, content_hash: str) -> AnsweredResult:
         return await asyncio.to_thread(self._get_sync, content_hash)
 
+    async def purge_by_chunk_ids(self, chunk_ids: frozenset[str]) -> int:
+        """Remove verified answer payloads that cite any invalidated Chunk ID."""
+
+        if not chunk_ids:
+            return 0
+        return await asyncio.to_thread(self._purge_by_chunk_ids_sync, chunk_ids)
+
     def _put_sync(self, result: AnsweredResult) -> str:
         payload = result.model_dump(mode="json")
         content_hash = canonical_json_hash(payload)
@@ -92,6 +99,39 @@ class AnswerSnapshotStore:
             raise
         except (OSError, ValidationError, UnicodeDecodeError):
             raise AnswerIntegrityError("verified answer snapshot failed validation") from None
+
+    def _purge_by_chunk_ids_sync(self, chunk_ids: frozenset[str]) -> int:
+        sha_root = self._root / "sha256"
+        if not sha_root.exists():
+            return 0
+        if sha_root.is_symlink() or not sha_root.is_dir():
+            raise AnswerIntegrityError("answer snapshot hierarchy is unsafe")
+        purged = 0
+        try:
+            prefixes = tuple(sha_root.iterdir())
+            for prefix in prefixes:
+                if (
+                    prefix.is_symlink()
+                    or not prefix.is_dir()
+                    or not re.fullmatch(r"[0-9a-f]{2}", prefix.name)
+                ):
+                    raise AnswerIntegrityError("answer snapshot hierarchy is unsafe")
+                for target in tuple(prefix.iterdir()):
+                    if target.is_symlink() or not target.is_file():
+                        raise AnswerIntegrityError("answer snapshot hierarchy is unsafe")
+                    content_hash = target.stem
+                    if target.suffix != ".json" or not _SHA256.fullmatch(content_hash):
+                        raise AnswerIntegrityError("answer snapshot hierarchy is unsafe")
+                    result = self._get_sync(content_hash)
+                    cited = {citation.chunk_id for citation in result.citations}
+                    if cited.intersection(chunk_ids):
+                        target.unlink()
+                        purged += 1
+        except AnswerIntegrityError:
+            raise
+        except OSError:
+            raise AnswerIntegrityError("answer snapshot invalidation failed safely") from None
+        return purged
 
     def _path(self, content_hash: str) -> Path:
         if not _SHA256.fullmatch(content_hash):

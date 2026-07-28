@@ -9,11 +9,13 @@ import pytest
 
 from trustworthy_kb.answer.eval_cli import main
 from trustworthy_kb.answer.ragas_adapter import build_ragas_dataset, load_ragas_rows
+from trustworthy_kb.domain import IndexGenerationId
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
 
 def test_committed_golden_dataset_passes_deterministic_p0_gate(capsys) -> None:
+    generation_id = IndexGenerationId.generate()
     main(
         [
             "deterministic",
@@ -21,11 +23,14 @@ def test_committed_golden_dataset_passes_deterministic_p0_gate(capsys) -> None:
             str(PROJECT_ROOT / "evals/golden/p0-cases.jsonl"),
             "--observations",
             str(PROJECT_ROOT / "evals/golden/p0-observations.jsonl"),
+            "--generation-id",
+            str(generation_id),
         ]
     )
 
     result = json.loads(capsys.readouterr().out)
     assert result["passed"] is True
+    assert result["generation_id"] == str(generation_id)
     assert result["metrics"]["citation_precision"] >= 0.95
     assert result["metrics"]["retrieval_recall"] >= 0.90
     assert result["metrics"]["refusal_accuracy"] == 1.0

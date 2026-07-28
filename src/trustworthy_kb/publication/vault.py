@@ -8,7 +8,7 @@ import re
 import secrets
 from pathlib import Path, PurePosixPath
 
-from trustworthy_kb.domain import CuratedVersionId
+from trustworthy_kb.domain import CuratedVersionId, KnowledgeNoteId
 from trustworthy_kb.publication.contracts import CurationArtifact
 from trustworthy_kb.publication.curation import verify_curated_markdown
 from trustworthy_kb.publication.errors import CurationError, VaultPublicationError
@@ -25,6 +25,7 @@ class AtomicVaultPublisher:
         *,
         staging_root: str = "_AI/Staging",
         versions_root: str = "_AI/Versions",
+        trash_root: str = "_AI/Trash",
         max_bytes: int = 5 * 1024 * 1024,
     ) -> None:
         root_input = vault_root.expanduser()
@@ -38,6 +39,7 @@ class AtomicVaultPublisher:
         self._root = root
         self._staging_root = _root_path(staging_root)
         self._versions_root = _root_path(versions_root)
+        self._trash_root = _root_path(trash_root)
         self._max_bytes = max_bytes
 
     def staging_path(self, artifact: CurationArtifact) -> str:
@@ -79,6 +81,47 @@ class AtomicVaultPublisher:
         """Return whether a non-symlink file exists at a safe relative path."""
 
         return await asyncio.to_thread(self._exists_sync, relative_path)
+
+    def trash_path(self, note_id: KnowledgeNoteId, version_id: CuratedVersionId) -> str:
+        """Return the deterministic recoverable path for one recycled publication."""
+
+        return (self._trash_root / str(note_id) / f"{version_id}.md").as_posix()
+
+    async def recycle(
+        self,
+        relative_path: str,
+        *,
+        note_id: KnowledgeNoteId,
+        version_id: CuratedVersionId,
+        expected_hash: str,
+    ) -> str:
+        """Move a verified generated note to the local recycle area idempotently."""
+
+        return await asyncio.to_thread(
+            self._recycle_sync,
+            relative_path,
+            note_id,
+            version_id,
+            expected_hash,
+        )
+
+    async def restore_recycled(
+        self,
+        relative_path: str,
+        *,
+        note_id: KnowledgeNoteId,
+        version_id: CuratedVersionId,
+        expected_hash: str,
+    ) -> str:
+        """Restore one verified recycled note without overwriting another file."""
+
+        return await asyncio.to_thread(
+            self._restore_recycled_sync,
+            relative_path,
+            note_id,
+            version_id,
+            expected_hash,
+        )
 
     def _stage_sync(self, artifact: CurationArtifact) -> str:
         relative = self.staging_path(artifact)
@@ -137,6 +180,60 @@ class AtomicVaultPublisher:
     def _exists_sync(self, relative_path: str) -> bool:
         target = self._target(relative_path, create_parents=False)
         return target.exists() and target.is_file() and not target.is_symlink()
+
+    def _recycle_sync(
+        self,
+        relative_path: str,
+        note_id: KnowledgeNoteId,
+        version_id: CuratedVersionId,
+        expected_hash: str,
+    ) -> str:
+        target = self._target(relative_path, create_parents=False)
+        recycle_relative = self.trash_path(note_id, version_id)
+        recycled = self._target(recycle_relative, create_parents=True)
+        if not target.exists():
+            metadata = self._verify_target(recycled, expected_hash)
+            if metadata.get("curated_version_id") != str(version_id):
+                raise VaultPublicationError("recycled note identity changed")
+            return recycle_relative
+        metadata = self._verify_target(target, expected_hash)
+        if metadata.get("curated_version_id") != str(version_id):
+            raise VaultPublicationError("generated note identity changed before recycling")
+        if recycled.exists():
+            self._verify_target(recycled, expected_hash)
+            raise VaultPublicationError("recycle target already exists while note is active")
+        try:
+            os.replace(target, recycled)
+        except OSError:
+            raise VaultPublicationError("atomic Vault recycling failed") from None
+        self._verify_target(recycled, expected_hash)
+        return recycle_relative
+
+    def _restore_recycled_sync(
+        self,
+        relative_path: str,
+        note_id: KnowledgeNoteId,
+        version_id: CuratedVersionId,
+        expected_hash: str,
+    ) -> str:
+        target = self._target(relative_path, create_parents=True)
+        recycled = self._target(self.trash_path(note_id, version_id), create_parents=False)
+        if target.exists():
+            metadata = self._verify_target(target, expected_hash)
+            if metadata.get("curated_version_id") != str(version_id):
+                raise VaultPublicationError("restored note identity changed")
+            if recycled.exists():
+                raise VaultPublicationError("both active and recycled note copies exist")
+            return _relative_text(relative_path)
+        metadata = self._verify_target(recycled, expected_hash)
+        if metadata.get("curated_version_id") != str(version_id):
+            raise VaultPublicationError("recycled note identity changed")
+        try:
+            os.replace(recycled, target)
+        except OSError:
+            raise VaultPublicationError("atomic Vault restoration failed") from None
+        self._verify_target(target, expected_hash)
+        return _relative_text(relative_path)
 
     def _verify_target(self, target: Path, expected_hash: str) -> dict[str, object]:
         raw = _safe_read(target, self._max_bytes)

@@ -78,6 +78,55 @@ async def test_vault_stage_publish_and_replace_are_verified(tmp_path: Path) -> N
     ] == str(second.curated_version_id)
 
 
+async def test_vault_recycle_and_restore_are_verified_and_idempotent(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    publisher = AtomicVaultPublisher(vault)
+    note_id = KnowledgeNoteId.generate()
+    artifact = _artifact(note_id, CuratedVersionId.generate(), "recoverable")
+    await publisher.stage(artifact)
+    final_path = await publisher.publish(artifact, "40-Concepts/Recoverable.md")
+
+    recycled = await publisher.recycle(
+        final_path,
+        note_id=note_id,
+        version_id=artifact.curated_version_id,
+        expected_hash=artifact.content_hash,
+    )
+    assert (
+        await publisher.recycle(
+            final_path,
+            note_id=note_id,
+            version_id=artifact.curated_version_id,
+            expected_hash=artifact.content_hash,
+        )
+        == recycled
+    )
+    assert not (vault / final_path).exists()
+    assert (vault / recycled).is_file()
+
+    assert (
+        await publisher.restore_recycled(
+            final_path,
+            note_id=note_id,
+            version_id=artifact.curated_version_id,
+            expected_hash=artifact.content_hash,
+        )
+        == final_path
+    )
+    assert (
+        await publisher.restore_recycled(
+            final_path,
+            note_id=note_id,
+            version_id=artifact.curated_version_id,
+            expected_hash=artifact.content_hash,
+        )
+        == final_path
+    )
+    assert (vault / final_path).is_file()
+    assert not (vault / recycled).exists()
+
+
 async def test_vault_refuses_path_escape_and_manual_conflict(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     vault.mkdir()

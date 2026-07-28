@@ -92,10 +92,36 @@ class VaultVerificationGateway(Protocol):
     async def verify(self, relative_path: str, *, expected_hash: str) -> Mapping[str, object]: ...
 
 
+class LifecycleVaultGateway(VaultVerificationGateway, Protocol):
+    async def recycle(
+        self,
+        relative_path: str,
+        *,
+        note_id: KnowledgeNoteId,
+        version_id: CuratedVersionId,
+        expected_hash: str,
+    ) -> str: ...
+
+    async def restore_recycled(
+        self,
+        relative_path: str,
+        *,
+        note_id: KnowledgeNoteId,
+        version_id: CuratedVersionId,
+        expected_hash: str,
+    ) -> str: ...
+
+
+class AnswerInvalidationGateway(Protocol):
+    async def purge_by_chunk_ids(self, chunk_ids: frozenset[str]) -> int: ...
+
+
 __all__ = [
+    "AnswerInvalidationGateway",
     "CurationPlanner",
     "CurrentVersionResolver",
     "EmbeddingGateway",
+    "LifecycleVaultGateway",
     "RerankerGateway",
     "StructuredModelGateway",
     "VaultVerificationGateway",

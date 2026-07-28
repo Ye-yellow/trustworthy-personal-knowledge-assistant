@@ -112,13 +112,17 @@ _TRANSITIONS: dict[type[StrEnum], dict[StrEnum, frozenset[StrEnum]]] = {
             {IndexGenerationStatus.ACTIVE, IndexGenerationStatus.FAILED}
         ),
         IndexGenerationStatus.ACTIVE: frozenset({IndexGenerationStatus.SUPERSEDED}),
+        IndexGenerationStatus.SUPERSEDED: frozenset({IndexGenerationStatus.ACTIVE}),
     },
     IndexJobStatus: {
         IndexJobStatus.PENDING: frozenset({IndexJobStatus.INDEXING}),
         IndexJobStatus.INDEXING: frozenset({IndexJobStatus.INDEXED, IndexJobStatus.FAILED}),
         IndexJobStatus.INDEXED: frozenset({IndexJobStatus.ACTIVE_INDEXED}),
         IndexJobStatus.ACTIVE_INDEXED: frozenset({IndexJobStatus.DELETE_PENDING}),
-        IndexJobStatus.DELETE_PENDING: frozenset({IndexJobStatus.DELETED}),
+        IndexJobStatus.DELETE_PENDING: frozenset(
+            {IndexJobStatus.DELETED, IndexJobStatus.ACTIVE_INDEXED}
+        ),
+        IndexJobStatus.DELETED: frozenset({IndexJobStatus.PENDING}),
         IndexJobStatus.FAILED: frozenset({IndexJobStatus.PENDING}),
     },
     KnowledgeChangeStatus: {

@@ -26,6 +26,7 @@ def _parser() -> argparse.ArgumentParser:
     deterministic = commands.add_parser("deterministic")
     deterministic.add_argument("--cases", type=Path, default=_DEFAULT_CASES)
     deterministic.add_argument("--observations", type=Path, default=_DEFAULT_OBSERVATIONS)
+    deterministic.add_argument("--generation-id")
     ragas = commands.add_parser("ragas")
     ragas.add_argument("rows", type=Path)
     return parser
@@ -57,11 +58,14 @@ def _run(args: argparse.Namespace) -> tuple[dict[str, object], bool]:
         and evaluation_metrics.refusal_accuracy == 1.0
         and evaluation_metrics.unsafe_citation_count == 0
     )
-    return {
+    result: dict[str, object] = {
         "mode": "deterministic",
         "passed": passed,
         "metrics": evaluation_metrics.model_dump(mode="json"),
-    }, passed
+    }
+    if args.generation_id:
+        result["generation_id"] = args.generation_id
+    return result, passed
 
 
 def main(argv: Sequence[str] | None = None) -> None:

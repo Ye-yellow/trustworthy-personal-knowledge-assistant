@@ -151,6 +151,15 @@ class AuditRepository:
         await flush_safely(self._session, entity="operation log", identifier=record.id)
         return to_record(OperationLogRecord, row)
 
+    async def get_latest_operation_log(self, operation_id: str) -> OperationLogRecord | None:
+        row = await self._session.scalar(
+            select(OperationLogTable)
+            .where(OperationLogTable.operation_id == operation_id)
+            .order_by(OperationLogTable.step_number.desc())
+            .limit(1)
+        )
+        return None if row is None else to_record(OperationLogRecord, row)
+
     async def acquire_idempotency_key(
         self,
         *,

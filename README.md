@@ -227,6 +227,40 @@ uv run trustworthy-kb-eval ragas evals/golden/ragas-synthetic.jsonl
 完整拒答、SSE、隐私和评估契约见
 [L5 设计规格](docs/superpowers/specs/2026-07-28-l5-trusted-qa-api-evaluation-design.md)。
 
+## 当前可用：P0 生命周期恢复
+
+已发布笔记只能软删除。删除命令先在一个 SQLite 事务中设置 `deleted_at` 并把索引任务切为
+`DELETE_PENDING`，因此新问答会立即停止召回；随后才把生成笔记移动到 `_AI/Trash`、强读回确认
+Milvus Chunk 已清除，并删除引用这些 Chunk 的私有答案快照。任一步失败都保持笔记不可召回，使用
+同一 `operation_id` 重跑即可继续：
+
+```powershell
+uv run trustworthy-kb-publication lifecycle delete <knowledge_note_id> --operation-id delete:<knowledge_note_id>
+uv run trustworthy-kb-publication lifecycle restore <knowledge_note_id> --operation-id restore:<knowledge_note_id>
+```
+
+Embedding 或 Chunker 升级不允许由单篇发布隐式切换代际。先创建并全量重建 STAGING 代际，
+用该代际产生的 Golden observations 生成与目标 `generation_id` 绑定的门禁报告，再一次性切换
+所有实时指针：
+
+```powershell
+uv run trustworthy-kb-publication generation create
+uv run trustworthy-kb-publication generation rebuild <new_generation_id>
+uv run trustworthy-kb-eval deterministic --generation-id <new_generation_id> --observations <new_generation_observations.jsonl> | Out-File -Encoding utf8 ./storage/generation-gate.json
+uv run trustworthy-kb-publication generation promote <new_generation_id> --gate-report ./storage/generation-gate.json
+```
+
+升级失败时旧 ACTIVE 代际继续服务，可将失败的 STAGING 代际明确终止；成功切换后旧 Collection
+默认保留，回滚前会逐 Chunk 验证其仍完整，验证通过才原子切回：
+
+```powershell
+uv run trustworthy-kb-publication generation abort <failed_generation_id>
+uv run trustworthy-kb-publication generation rollback <superseded_generation_id>
+```
+
+完整顺序、崩溃边界和不变量见
+[P0 生命周期恢复规格](docs/superpowers/specs/2026-07-28-p0-lifecycle-recovery-design.md)。
+
 ## 开发与验证
 
 ```powershell

@@ -59,7 +59,7 @@ def test_declared_transitions_are_allowed(current: object, target: object) -> No
         (AnswerRunStatus.ANSWERED, AnswerRunStatus.IN_PROGRESS),
         (CuratedVersionStatus.ACTIVE, CuratedVersionStatus.DRAFT),
         (IndexGenerationStatus.FAILED, IndexGenerationStatus.ACTIVE),
-        (IndexJobStatus.DELETED, IndexJobStatus.PENDING),
+        (IndexJobStatus.DELETED, IndexJobStatus.ACTIVE_INDEXED),
         (KnowledgeChangeStatus.FAILED, KnowledgeChangeStatus.VALIDATING),
         (ModelRunStatus.SUCCEEDED, ModelRunStatus.STARTED),
         (IdempotencyStatus.SUCCEEDED, IdempotencyStatus.IN_PROGRESS),

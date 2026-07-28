@@ -20,6 +20,14 @@ class GenerationIndexer:
         self._embedding = embedding
         self._index = index
 
+    @property
+    def embedding_model(self) -> str:
+        return self._embedding.model_name
+
+    @property
+    def embedding_dimension(self) -> int:
+        return self._embedding.dimension
+
     async def index(self, chunks: Sequence[KnowledgeChunk]) -> int:
         """Upsert all chunks and prove their identity through the strong-read port."""
 
