@@ -31,6 +31,7 @@ def upgrade() -> None:
         sa.Column(
             "scope",
             sa.Enum(
+                "auto",
                 "general",
                 "personal",
                 name="answer_scope",

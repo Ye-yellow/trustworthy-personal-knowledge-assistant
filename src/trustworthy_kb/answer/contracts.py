@@ -253,6 +253,14 @@ class AnswerEvent(StrictAnswerContract):
     run_id: AnswerRunId
     occurred_at: AwareDatetime
     payload: dict[str, str | int | bool]
+    result: AnswerResult | None = None
+
+    @model_validator(mode="after")
+    def _terminal_result_shape(self) -> AnswerEvent:
+        terminal = self.event in {AnswerEventType.ANSWER, AnswerEventType.REFUSAL}
+        if terminal != (self.result is not None):
+            raise ValueError("only terminal answer events may contain a result")
+        return self
 
 
 class GoldenCase(StrictAnswerContract):

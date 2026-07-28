@@ -120,6 +120,7 @@ class PublicationRunStatus(StrEnum):
 
 
 class AnswerScope(StrEnum):
+    AUTO = "auto"
     GENERAL = "general"
     PERSONAL = "personal"
 

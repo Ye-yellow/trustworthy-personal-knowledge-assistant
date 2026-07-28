@@ -4,13 +4,16 @@ from pydantic import ValidationError
 from trustworthy_kb.config import AnswerSettings
 
 
-def test_answer_settings_default_to_loopback_and_bounded_policy() -> None:
-    settings = AnswerSettings()
+def test_answer_settings_default_to_loopback_and_bounded_policy(tmp_path) -> None:
+    settings = AnswerSettings(snapshot_root=str(tmp_path / "private-snapshots"))
 
     assert settings.api_host == "127.0.0.1"
     assert settings.api_port == 8765
     assert settings.max_answer_claims == 12
     assert settings.min_evidence_count <= settings.default_top_k
+    assert settings.snapshot_root_value == tmp_path / "private-snapshots"
+    assert str(tmp_path) not in repr(settings)
+    assert str(tmp_path) not in settings.model_dump_json()
 
 
 @pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.10", "localhost", "example.test"])

@@ -29,9 +29,12 @@ from trustworthy_kb.answer.evaluation import (
     export_ragas_jsonl,
     load_golden_cases,
 )
+from trustworthy_kb.answer.evidence import SqliteAnswerEvidenceResolver
 from trustworthy_kb.answer.generation import StructuredAnswerGenerator
 from trustworthy_kb.answer.planning import AnswerPlanner, retrieval_query_for_plan
 from trustworthy_kb.answer.rendering import render_verified_answer
+from trustworthy_kb.answer.service import TrustedAnswerService
+from trustworthy_kb.answer.snapshot_store import AnswerSnapshotStore
 from trustworthy_kb.answer.verification import (
     validate_citation_closed_set,
     validate_semantic_support,
@@ -49,6 +52,7 @@ __all__ = [
     "AnswerPlanner",
     "AnswerRequest",
     "AnswerResult",
+    "AnswerSnapshotStore",
     "AnswerStatus",
     "AnswerUnavailableError",
     "AnsweredResult",
@@ -63,7 +67,9 @@ __all__ = [
     "QueryScope",
     "RefusalCode",
     "RefusedResult",
+    "SqliteAnswerEvidenceResolver",
     "StructuredAnswerGenerator",
+    "TrustedAnswerService",
     "evaluate_observations",
     "export_ragas_jsonl",
     "load_golden_cases",
