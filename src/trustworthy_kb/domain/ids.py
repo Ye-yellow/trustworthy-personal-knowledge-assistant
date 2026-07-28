@@ -92,6 +92,10 @@ class IndexJobId(TypedId):
     prefix = "idxjob_"
 
 
+class PublicationRunId(TypedId):
+    prefix = "pubrun_"
+
+
 class ModelRunId(TypedId):
     prefix = "modelrun_"
 
@@ -138,6 +142,7 @@ ALL_ID_TYPES: tuple[type[TypedId], ...] = (
     LineageEdgeId,
     IndexGenerationId,
     IndexJobId,
+    PublicationRunId,
     ModelRunId,
     OperationLogId,
     IdempotencyRecordId,
@@ -177,6 +182,7 @@ __all__ = [
     "LineageEdgeId",
     "ModelRunId",
     "OperationLogId",
+    "PublicationRunId",
     "QualityCheckId",
     "ReviewRequestId",
     "SourceId",

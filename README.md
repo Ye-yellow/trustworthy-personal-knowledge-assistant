@@ -3,8 +3,8 @@
 一个以 Obsidian 为人工可读知识真源、以 SQLite 管理知识血缘和状态、以 Milvus 提供可重建混合检索的可信个人知识助手。
 
 项目已完成 L0 工程/模型网关基线、L1 领域/SQLite 控制面、L2 本地 Markdown
-采集与故障恢复，以及 L3 Claim/证据/质量治理。Obsidian 发布与检索仍未实现，因此当前版本尚不适合
-生产使用或处理唯一副本的私人资料。
+采集与故障恢复、L3 Claim/证据/质量治理，以及 L4 安全发布、Milvus 混合检索与三方对账。
+L5 可信问答 API 与评估尚未实现，因此当前版本仍不适合无人值守生产使用或处理唯一副本。
 
 ## 核心原则
 
@@ -155,10 +155,41 @@ manifest 和 EvidencePack 保存在 `./storage/evidence-snapshots`，LangGraph �
 只有经过人工批准的权威域名才应加入对应 JSON 数组。完整策略见
 [L3 设计规格](docs/superpowers/specs/2026-07-28-l3-claim-evidence-quality-governance-design.md)。
 
+## 当前可用：L4 安全发布与混合检索
+
+L4 只发布已经通过 L3 的 `VERIFIED`、`USER_ASSERTED` 或 `OPINION` Claim。模型只能选择
+标题和分组，Markdown 中的事实句、Claim ID、来源、质量状态与内容哈希均由代码确定性生成。
+发布采用可恢复 Saga：先验证 Vault 暂存文件，再写入并强读回 Milvus，随后原子替换生成笔记，
+最后才在同一 SQLite 事务中切换当前版本与索引代际。索引可自动重建；Vault 哈希不一致则阻断，
+不会静默覆盖人工修改。
+
+首次运行安装本地检索依赖并启动 WSL Docker 中的 Milvus Standalone：
+
+```powershell
+uv sync --extra dev --extra retrieval --extra bge
+powershell -ExecutionPolicy Bypass -File scripts/milvus.ps1 start
+uv run alembic upgrade head
+uv run trustworthy-kb-publication generation create
+```
+
+在 `.env` 中配置本地 Vault 和模型目录后，可发布一条已处于 `PUBLISH_INTENT` 的变化并检索：
+
+```powershell
+uv run trustworthy-kb-publication publish <knowledge_change_id> --path 40-Concepts/Example.md
+uv run trustworthy-kb-publication retrieve "要查询的问题" --top-k 5
+uv run trustworthy-kb-publication reconcile
+```
+
+P0 默认使用 `BAAI/bge-m3` 的 1024 维 dense embedding、Milvus 内置 BM25、RRF `k=60`
+和 `BAAI/bge-reranker-v2-m3`。Milvus 仅绑定 `127.0.0.1:19530`，数据保存在 Docker named
+volume；`scripts/milvus.ps1 status|logs|stop` 可管理服务。LLM 仍通过统一模型网关调用 WSL
+sub2api，可随配置切换 Provider。完整契约见
+[L4 设计规格](docs/superpowers/specs/2026-07-28-l4-safe-publication-hybrid-retrieval-design.md)。
+
 ## 开发与验证
 
 ```powershell
-uv sync --extra dev
+uv sync --extra dev --extra retrieval
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy
@@ -171,6 +202,10 @@ uv build
 真实 sub2api 测试默认跳过。只有在当前进程已安全注入 key 后，才显式设置
 `TRUSTKB_RUN_SUB2API_INTEGRATION=1` 并运行
 `uv run pytest tests/integration/test_sub2api.py`。测试只发送合成内容。
+
+真实 Milvus 测试同样是显式集成测试；服务启动后运行
+`uv run pytest tests/integration/test_milvus.py -q`，测试只写入一个随机命名的临时 Collection，
+并在完成后精确删除该 Collection。
 
 ## 公开仓库隐私规则
 

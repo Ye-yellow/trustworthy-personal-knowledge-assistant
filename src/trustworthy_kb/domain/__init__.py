@@ -21,6 +21,7 @@ from trustworthy_kb.domain.enums import (
     KnowledgeChangeStatus,
     ModelRunPurpose,
     ModelRunStatus,
+    PublicationRunStatus,
     QualityVerdict,
     ReviewRequestStatus,
     RiskLevel,
@@ -58,6 +59,7 @@ from trustworthy_kb.domain.ids import (
     LineageEdgeId,
     ModelRunId,
     OperationLogId,
+    PublicationRunId,
     QualityCheckId,
     ReviewRequestId,
     SourceId,
@@ -86,6 +88,7 @@ from trustworthy_kb.domain.publication import (
     KnowledgeChangeRecord,
     KnowledgeNoteRecord,
     LineageEdgeRecord,
+    PublicationRunRecord,
 )
 from trustworthy_kb.domain.source import ContentBlockRecord, SourceRecord, SourceVersionRecord
 from trustworthy_kb.domain.transitions import can_transition, require_transition
@@ -149,6 +152,9 @@ __all__ = [
     "ModelRunStatus",
     "OperationLogId",
     "OperationLogRecord",
+    "PublicationRunId",
+    "PublicationRunRecord",
+    "PublicationRunStatus",
     "QualityCheckEvidenceRecord",
     "QualityCheckId",
     "QualityCheckRecord",

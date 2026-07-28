@@ -30,6 +30,7 @@ EXPECTED_TABLES = {
     "lineage_edges",
     "model_runs",
     "operation_logs",
+    "publication_runs",
     "quality_check_evidence",
     "quality_checks",
     "review_requests",

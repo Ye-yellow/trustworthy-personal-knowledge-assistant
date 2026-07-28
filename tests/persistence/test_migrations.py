@@ -36,6 +36,7 @@ EXPECTED_CONTROL_TABLES = {
     "lineage_edges",
     "model_runs",
     "operation_logs",
+    "publication_runs",
     "quality_check_evidence",
     "quality_checks",
     "review_requests",
@@ -241,4 +242,5 @@ def test_initial_migration_supports_offline_sql(tmp_path: Path) -> None:
     assert "CREATE TABLE source_locations" in sql
     assert "CREATE TABLE governance_runs" in sql
     assert "CREATE TABLE review_requests" in sql
+    assert "CREATE TABLE publication_runs" in sql
     assert "trg_operation_logs_no_update" in sql
