@@ -9,10 +9,14 @@ description = "Evidence-aware personal knowledge assistant with auditable lineag
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
+  "aiosqlite>=0.22,<1",
+  "alembic>=1.18,<2",
   "langchain>=1.0,<2",
   "langchain-openai>=1.0,<2",
   "pydantic>=2.12,<3",
   "pydantic-settings>=2.12,<3",
+  "python-ulid>=3,<4",
+  "sqlalchemy[asyncio]>=2.0,<2.1",
 ]
 
 [project.optional-dependencies]
