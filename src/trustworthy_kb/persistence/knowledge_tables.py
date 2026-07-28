@@ -12,6 +12,7 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     String,
     UniqueConstraint,
 )
@@ -48,6 +49,8 @@ class ClaimTable(RevisionMixin, TimestampMixin, Base):
     __tablename__ = "claims"
 
     id: Mapped[ClaimId] = mapped_column(TypedIdType(ClaimId), primary_key=True)
+    claim_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    claim_family_key: Mapped[str] = mapped_column(String(64), nullable=False)
     claim_type: Mapped[ClaimType] = mapped_column(
         Enum(
             ClaimType,
@@ -104,6 +107,8 @@ class ClaimTable(RevisionMixin, TimestampMixin, Base):
 
     __table_args__ = (
         CheckConstraint(id_prefix_check("id", ClaimId), name="claim_id_prefix"),
+        CheckConstraint(sha256_check("claim_fingerprint"), name="claim_fingerprint"),
+        CheckConstraint(sha256_check("claim_family_key"), name="claim_family_key"),
         CheckConstraint("length(subject) > 0", name="claim_subject_not_empty"),
         CheckConstraint("length(predicate) > 0", name="claim_predicate_not_empty"),
         CheckConstraint("json_valid(object_json)", name="claim_object_json_valid"),
@@ -117,6 +122,23 @@ class ClaimTable(RevisionMixin, TimestampMixin, Base):
             name="claim_not_self_superseded",
         ),
         CheckConstraint("revision >= 1", name="claim_revision_positive"),
+        Index("ix_claims_claim_family_key", "claim_family_key"),
+        Index(
+            "uq_claims_active_fingerprint",
+            "claim_fingerprint",
+            unique=True,
+            sqlite_where=(
+                (deleted_at.is_(None))
+                & status.not_in(
+                    (
+                        ClaimStatus.OUTDATED,
+                        ClaimStatus.REJECTED,
+                        ClaimStatus.SUPERSEDED,
+                        ClaimStatus.QUARANTINED,
+                    )
+                )
+            ),
+        ),
     )
 
 

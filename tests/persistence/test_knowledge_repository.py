@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -48,6 +49,8 @@ def claim_record(*, claim_id: ClaimId | None = None, subject: str = "subject") -
     timestamp = now()
     return ClaimRecord(
         id=claim_id or ClaimId.generate(),
+        claim_fingerprint=hashlib.sha256(subject.encode()).hexdigest(),
+        claim_family_key="c" * 64,
         claim_type=ClaimType.FACT,
         subject=subject,
         predicate="is",

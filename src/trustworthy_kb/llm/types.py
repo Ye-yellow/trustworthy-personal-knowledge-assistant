@@ -16,6 +16,7 @@ class ModelPurpose(StrEnum):
     EVIDENCE_VERIFICATION = "evidence_verification"
     CURATION = "curation"
     ANSWER_GENERATION = "answer_generation"
+    EVIDENCE_SEARCH = "evidence_search"
 
 
 @dataclass(frozen=True, slots=True)

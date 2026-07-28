@@ -7,6 +7,8 @@ from enum import StrEnum
 from trustworthy_kb.domain.enums import (
     ClaimStatus,
     CuratedVersionStatus,
+    GovernanceItemStage,
+    GovernanceRunStatus,
     IdempotencyStatus,
     IndexGenerationStatus,
     IndexJobStatus,
@@ -14,6 +16,7 @@ from trustworthy_kb.domain.enums import (
     IngestionRunStatus,
     KnowledgeChangeStatus,
     ModelRunStatus,
+    ReviewRequestStatus,
     SourceVersionStatus,
 )
 from trustworthy_kb.domain.errors import InvalidStateTransitionError
@@ -55,6 +58,7 @@ _TRANSITIONS: dict[type[StrEnum], dict[StrEnum, frozenset[StrEnum]]] = {
                 ClaimStatus.INSUFFICIENT,
                 ClaimStatus.CONTESTED,
                 ClaimStatus.REJECTED,
+                ClaimStatus.QUARANTINED,
             }
         ),
         **{
@@ -116,6 +120,14 @@ _TRANSITIONS: dict[type[StrEnum], dict[StrEnum, frozenset[StrEnum]]] = {
         KnowledgeChangeStatus.VALIDATING: frozenset(
             {
                 KnowledgeChangeStatus.PUBLISH_INTENT,
+                KnowledgeChangeStatus.REVIEW_REQUIRED,
+                KnowledgeChangeStatus.FAILED,
+                KnowledgeChangeStatus.QUARANTINED,
+            }
+        ),
+        KnowledgeChangeStatus.REVIEW_REQUIRED: frozenset(
+            {
+                KnowledgeChangeStatus.PUBLISH_INTENT,
                 KnowledgeChangeStatus.FAILED,
                 KnowledgeChangeStatus.QUARANTINED,
             }
@@ -173,6 +185,68 @@ _TRANSITIONS: dict[type[StrEnum], dict[StrEnum, frozenset[StrEnum]]] = {
             }
         ),
         IngestionItemStatus.FAILED: frozenset({IngestionItemStatus.PENDING}),
+    },
+    GovernanceRunStatus: {
+        GovernanceRunStatus.PLANNING: frozenset(
+            {
+                GovernanceRunStatus.EXTRACTING,
+                GovernanceRunStatus.FAILED,
+                GovernanceRunStatus.QUARANTINED,
+            }
+        ),
+        GovernanceRunStatus.EXTRACTING: frozenset(
+            {
+                GovernanceRunStatus.EVALUATING,
+                GovernanceRunStatus.FAILED,
+                GovernanceRunStatus.QUARANTINED,
+            }
+        ),
+        GovernanceRunStatus.EVALUATING: frozenset(
+            {
+                GovernanceRunStatus.RECONCILING,
+                GovernanceRunStatus.FAILED,
+                GovernanceRunStatus.QUARANTINED,
+            }
+        ),
+        GovernanceRunStatus.RECONCILING: frozenset(
+            {
+                GovernanceRunStatus.COMPLETED,
+                GovernanceRunStatus.PARTIAL_FAILED,
+                GovernanceRunStatus.FAILED,
+                GovernanceRunStatus.QUARANTINED,
+            }
+        ),
+    },
+    GovernanceItemStage: {
+        GovernanceItemStage.EXTRACTED: frozenset(
+            {
+                GovernanceItemStage.EVIDENCE_PENDING,
+                GovernanceItemStage.DECIDING,
+                GovernanceItemStage.FAILED,
+            }
+        ),
+        GovernanceItemStage.EVIDENCE_PENDING: frozenset(
+            {GovernanceItemStage.VERIFYING, GovernanceItemStage.FAILED}
+        ),
+        GovernanceItemStage.VERIFYING: frozenset(
+            {GovernanceItemStage.DECIDING, GovernanceItemStage.FAILED}
+        ),
+        GovernanceItemStage.DECIDING: frozenset(
+            {
+                GovernanceItemStage.DECIDED,
+                GovernanceItemStage.REVIEW_REQUIRED,
+                GovernanceItemStage.FAILED,
+            }
+        ),
+    },
+    ReviewRequestStatus: {
+        ReviewRequestStatus.PENDING: frozenset(
+            {
+                ReviewRequestStatus.APPROVED,
+                ReviewRequestStatus.REJECTED,
+                ReviewRequestStatus.CANCELLED,
+            }
+        )
     },
 }
 

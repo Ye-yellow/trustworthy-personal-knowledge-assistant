@@ -32,6 +32,8 @@ from trustworthy_kb.domain.ids import (
 
 class ClaimRecord(DomainRecord):
     id: ClaimId
+    claim_fingerprint: Sha256Hex
+    claim_family_key: Sha256Hex
     claim_type: ClaimType
     subject: NonEmptyText
     predicate: NonEmptyText

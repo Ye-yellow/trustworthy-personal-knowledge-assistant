@@ -112,6 +112,18 @@ class IngestionItemId(TypedId):
     prefix = "ingitem_"
 
 
+class GovernanceRunId(TypedId):
+    prefix = "govrun_"
+
+
+class GovernanceItemId(TypedId):
+    prefix = "govitem_"
+
+
+class ReviewRequestId(TypedId):
+    prefix = "reviewreq_"
+
+
 ALL_ID_TYPES: tuple[type[TypedId], ...] = (
     SourceId,
     SourceVersionId,
@@ -131,6 +143,9 @@ ALL_ID_TYPES: tuple[type[TypedId], ...] = (
     IdempotencyRecordId,
     IngestionRunId,
     IngestionItemId,
+    GovernanceRunId,
+    GovernanceItemId,
+    ReviewRequestId,
 )
 
 
@@ -150,6 +165,8 @@ __all__ = [
     "CuratedVersionId",
     "EvidenceFamilyId",
     "EvidenceId",
+    "GovernanceItemId",
+    "GovernanceRunId",
     "IdempotencyRecordId",
     "IndexGenerationId",
     "IndexJobId",
@@ -161,6 +178,7 @@ __all__ = [
     "ModelRunId",
     "OperationLogId",
     "QualityCheckId",
+    "ReviewRequestId",
     "SourceId",
     "SourceVersionId",
     "TypedId",

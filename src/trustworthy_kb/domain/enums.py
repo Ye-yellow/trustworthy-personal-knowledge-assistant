@@ -47,6 +47,7 @@ class ClaimType(StrEnum):
     DECISION = "DECISION"
     PREDICTION = "PREDICTION"
     CODE_BEHAVIOR = "CODE_BEHAVIOR"
+    OPINION = "OPINION"
 
 
 class ClaimStatus(StrEnum):
@@ -59,6 +60,7 @@ class ClaimStatus(StrEnum):
     OUTDATED = "OUTDATED"
     REJECTED = "REJECTED"
     SUPERSEDED = "SUPERSEDED"
+    QUARANTINED = "QUARANTINED"
 
 
 class EvidenceStance(StrEnum):
@@ -119,6 +121,7 @@ class KnowledgeChangeStatus(StrEnum):
     ACTIVE = "ACTIVE"
     FAILED = "FAILED"
     QUARANTINED = "QUARANTINED"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
 
 
 class ModelRunPurpose(StrEnum):
@@ -126,6 +129,41 @@ class ModelRunPurpose(StrEnum):
     EVIDENCE_VERIFICATION = "evidence_verification"
     CURATION = "curation"
     ANSWER_GENERATION = "answer_generation"
+    EVIDENCE_SEARCH = "evidence_search"
+
+
+class GovernanceRunStatus(StrEnum):
+    PLANNING = "PLANNING"
+    EXTRACTING = "EXTRACTING"
+    EVALUATING = "EVALUATING"
+    RECONCILING = "RECONCILING"
+    COMPLETED = "COMPLETED"
+    PARTIAL_FAILED = "PARTIAL_FAILED"
+    FAILED = "FAILED"
+    QUARANTINED = "QUARANTINED"
+
+
+class GovernanceItemStage(StrEnum):
+    EXTRACTED = "EXTRACTED"
+    EVIDENCE_PENDING = "EVIDENCE_PENDING"
+    VERIFYING = "VERIFYING"
+    DECIDING = "DECIDING"
+    DECIDED = "DECIDED"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
+    FAILED = "FAILED"
+
+
+class ReviewRequestStatus(StrEnum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+
+
+class RiskLevel(StrEnum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
 
 
 class ModelRunStatus(StrEnum):
@@ -197,6 +235,8 @@ __all__ = [
     "CuratedVersionStatus",
     "EntityType",
     "EvidenceStance",
+    "GovernanceItemStage",
+    "GovernanceRunStatus",
     "IdempotencyStatus",
     "IndexGenerationStatus",
     "IndexJobStatus",
@@ -207,6 +247,8 @@ __all__ = [
     "ModelRunPurpose",
     "ModelRunStatus",
     "QualityVerdict",
+    "ReviewRequestStatus",
+    "RiskLevel",
     "Sensitivity",
     "SourceType",
     "SourceVersionStatus",
